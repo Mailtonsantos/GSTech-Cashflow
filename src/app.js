@@ -444,7 +444,7 @@ function catalogCard(kind, id, title, meta, note = "", isCustom = false) {
 
 function actionButtons(kind, id) {
   return `
-    <div class="card-actions" aria-label="Acoes do cadastro">
+    <div class="card-actions flex flex-row items-center gap-2" aria-label="Acoes do cadastro">
       <button class="icon-action" type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="Editar" aria-label="Editar">
         <span aria-hidden="true">✎</span>
       </button>
