@@ -9,5 +9,5 @@ export function App() {
     return <LoginPage isLoading={isLoading} onGoogleLogin={loginWithGoogle} />;
   }
 
-  return <DashboardPage />;
+  return <DashboardPage userId={user.id} />;
 }

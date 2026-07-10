@@ -82,3 +82,15 @@ export type Movimentacao = MovimentacaoInput & {
   criadoEm: string;
   atualizadoEm: string;
 };
+
+export type ContaBancaria = {
+  id: string;
+  userId: string;
+  nome: string;
+  banco?: string;
+  tipo: "carteira" | "corrente" | "poupanca" | "outros";
+  saldoInicial: number;
+  saldoAtual: number;
+  limite: number;
+  ativa: boolean;
+};

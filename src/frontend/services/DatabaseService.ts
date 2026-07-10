@@ -3,6 +3,7 @@ export type DatabasePlatform = "web" | "native";
 export type DatabaseConnection = {
   platform: DatabasePlatform;
   name: string;
+  userId: string;
   instance: IDBDatabase | unknown;
 };
 
@@ -35,17 +36,19 @@ export class DatabaseService {
   }
 
   async initialize({ userId }: DatabaseServiceOptions): Promise<DatabaseConnection> {
-    if (this.connection) {
+    if (this.connection?.userId === userId) {
       return this.connection;
     }
+
+    this.resetConnection();
 
     const platform = this.detectPlatform();
     const name = this.createDatabaseName(userId);
 
     this.connection =
       platform === "native"
-        ? await this.initializeNativeDatabase(name)
-        : await this.initializeWebDatabase(name);
+        ? await this.initializeNativeDatabase(name, userId)
+        : await this.initializeWebDatabase(name, userId);
 
     return this.connection;
   }
@@ -80,7 +83,7 @@ export class DatabaseService {
     return `gstec_cashflow_${userId.replace(/[^a-z0-9_-]/gi, "_")}`;
   }
 
-  private initializeWebDatabase(name: string): Promise<DatabaseConnection> {
+  private initializeWebDatabase(name: string, userId: string): Promise<DatabaseConnection> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(name, databaseVersion);
 
@@ -98,6 +101,7 @@ export class DatabaseService {
         resolve({
           platform: "web",
           name,
+          userId,
           instance: request.result,
         });
       };
@@ -106,10 +110,11 @@ export class DatabaseService {
     });
   }
 
-  private async initializeNativeDatabase(name: string): Promise<DatabaseConnection> {
+  private async initializeNativeDatabase(name: string, userId: string): Promise<DatabaseConnection> {
     return {
       platform: "native",
       name,
+      userId,
       instance: {
         pendingAdapter: "Capacitor SQLite",
       },

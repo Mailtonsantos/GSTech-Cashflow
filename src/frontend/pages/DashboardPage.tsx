@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { CalendarClock, CreditCard, TrendingUp, Wallet } from "lucide-react";
 import { MetricCard } from "../components/dashboard/MetricCard";
 import { AppShell } from "../components/layout/AppShell";
+import { useFinance } from "../hooks/useFinance";
 import { useFinanceSummary } from "../hooks/useFinanceSummary";
+import type { ResumoMensal } from "../types/finance";
 
 const money = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
@@ -9,15 +12,51 @@ const money = (value: number) =>
     currency: "BRL",
   }).format(value);
 
-export function DashboardPage() {
-  const summary = useFinanceSummary();
+type DashboardPageProps = {
+  userId: string;
+};
+
+export function DashboardPage({ userId }: DashboardPageProps) {
+  const fallbackSummary = useFinanceSummary();
+  const { loading, error, buscarResumoMensal } = useFinance({ userId });
+  const [monthlySummary, setMonthlySummary] = useState<ResumoMensal | null>(null);
+  const referenceDate = new Date();
+  const mes = referenceDate.getMonth() + 1;
+  const ano = referenceDate.getFullYear();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    buscarResumoMensal({ userId, mes, ano }).then((summary) => {
+      if (isMounted && summary) {
+        setMonthlySummary(summary);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [ano, buscarResumoMensal, mes, userId]);
+
+  const summary = {
+    ...fallbackSummary,
+    accountBalance: monthlySummary?.saldoContas ?? fallbackSummary.accountBalance,
+    monthlyIncome: monthlySummary?.totalEntradas ?? fallbackSummary.monthlyIncome,
+    monthlyExpense: monthlySummary?.totalSaidas ?? fallbackSummary.monthlyExpense,
+    monthBalance: monthlySummary?.balancoMes ?? fallbackSummary.monthBalance,
+  };
 
   return (
     <AppShell title="Visao principal">
       <div className="mt-5 inline-flex w-fit items-center gap-2 rounded-lg border border-cash-line bg-white px-3 py-2 text-sm font-bold text-cash-muted">
         <CalendarClock size={18} />
-        Fatura vence em {summary.nextInvoiceDueDate}
+        {loading ? "Atualizando dados..." : `Fatura vence em ${summary.nextInvoiceDueDate}`}
       </div>
+      {error && (
+        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+          {error.message}
+        </p>
+      )}
 
       <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard

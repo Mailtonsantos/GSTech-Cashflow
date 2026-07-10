@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { databaseService } from "../services/DatabaseService";
 import { FinanceRepository } from "../repositories/FinanceRepository";
 import type {
@@ -45,19 +45,35 @@ export function useFinance({ userId, repository }: UseFinanceOptions) {
     [getRepository],
   );
 
-  return useMemo(
-    () => ({
-      loading,
-      error,
-      salvarMovimentacao: (movimentacao: MovimentacaoInput) =>
-        execute((financeRepository) => financeRepository.salvarMovimentacao(movimentacao)),
-      buscarResumoMensal: (params: BuscarResumoMensalParams) =>
-        execute((financeRepository) => financeRepository.buscarResumoMensal(params)),
-      buscarFaturaAtual: (params: BuscarFaturaAtualParams) =>
-        execute((financeRepository) => financeRepository.buscarFaturaAtual(params)),
-      cadastrarCartao: (cartao: CartaoCreditoInput) =>
-        execute((financeRepository) => financeRepository.cadastrarCartao(cartao)),
-    }),
-    [error, execute, loading],
+  const salvarMovimentacao = useCallback(
+    (movimentacao: MovimentacaoInput) =>
+      execute((financeRepository) => financeRepository.salvarMovimentacao(movimentacao)),
+    [execute],
   );
+
+  const buscarResumoMensal = useCallback(
+    (params: BuscarResumoMensalParams) =>
+      execute((financeRepository) => financeRepository.buscarResumoMensal(params)),
+    [execute],
+  );
+
+  const buscarFaturaAtual = useCallback(
+    (params: BuscarFaturaAtualParams) =>
+      execute((financeRepository) => financeRepository.buscarFaturaAtual(params)),
+    [execute],
+  );
+
+  const cadastrarCartao = useCallback(
+    (cartao: CartaoCreditoInput) => execute((financeRepository) => financeRepository.cadastrarCartao(cartao)),
+    [execute],
+  );
+
+  return {
+    loading,
+    error,
+    salvarMovimentacao,
+    buscarResumoMensal,
+    buscarFaturaAtual,
+    cadastrarCartao,
+  };
 }

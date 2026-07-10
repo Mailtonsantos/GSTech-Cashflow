@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { signInWithGoogle } from "../services/authService";
-import { ensureLocalDatabaseForUser } from "../services/localDatabaseService";
+import { databaseService } from "../services/DatabaseService";
+import { FinanceRepository } from "../repositories/FinanceRepository";
 import type { UserProfile } from "../types/finance";
 
 export function useAuth() {
@@ -11,7 +12,9 @@ export function useAuth() {
     setIsLoading(true);
     try {
       const profile = await signInWithGoogle();
-      await ensureLocalDatabaseForUser(profile);
+      const connection = await databaseService.initialize({ userId: profile.id });
+      const financeRepository = new FinanceRepository(connection);
+      await financeRepository.ensureInitialUserData(profile);
       setUser(profile);
     } finally {
       setIsLoading(false);
