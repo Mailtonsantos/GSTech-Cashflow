@@ -11,12 +11,16 @@ type DatabaseServiceOptions = {
   userId: string;
 };
 
-const databaseVersion = 1;
+const databaseVersion = 2;
 
 const storeNames = [
   "usuarios",
+  "usuarios_dados_complementares",
+  "bandeiras_cartao",
+  "categorias_movimentacao",
   "contas_bancarias",
   "cartoes_credito",
+  "rendas",
   "faturas_cartao",
   "movimentacoes",
 ];

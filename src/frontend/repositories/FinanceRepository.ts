@@ -4,9 +4,14 @@ import type {
   IFinanceRepository,
 } from "./IFinanceRepository";
 import type {
+  BandeiraCartao,
+  BandeiraCartaoInput,
   ContaBancaria,
+  ContaBancariaInput,
   CartaoCredito,
   CartaoCreditoInput,
+  CategoriaMovimentacao,
+  CategoriaMovimentacaoInput,
   CreditCardImportPayload,
   CreditCardImportResult,
   FaturaAtual,
@@ -14,7 +19,16 @@ import type {
   ImportedCreditCardMovement,
   Movimentacao,
   MovimentacaoInput,
+  Renda,
+  RendaInput,
   ResumoMensal,
+  StatusCartao,
+  TipoCartao,
+  TipoCategoriaMovimentacao,
+  TipoContaBancaria,
+  TipoRenda,
+  UsuarioDadosComplementares,
+  UsuarioDadosComplementaresInput,
 } from "../types/finance";
 import type { DatabaseConnection } from "../services/DatabaseService";
 import type { UserProfile } from "../types/finance";
@@ -22,7 +36,16 @@ import type { UserProfile } from "../types/finance";
 const createId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
-type StoreName = "usuarios" | "contas_bancarias" | "cartoes_credito" | "faturas_cartao" | "movimentacoes";
+type StoreName =
+  | "usuarios"
+  | "usuarios_dados_complementares"
+  | "bandeiras_cartao"
+  | "categorias_movimentacao"
+  | "contas_bancarias"
+  | "cartoes_credito"
+  | "rendas"
+  | "faturas_cartao"
+  | "movimentacoes";
 
 type UsuarioRecord = {
   id: string;
@@ -30,6 +53,39 @@ type UsuarioRecord = {
   email: string;
   foto_url?: string;
   provedor_auth: string;
+  ultimo_login_em?: string;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+type UsuarioDadosComplementaresRecord = {
+  id: string;
+  user_id: string;
+  telefone?: string;
+  documento?: string;
+  data_nascimento?: string;
+  observacao?: string;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+type BandeiraCartaoRecord = {
+  id: string;
+  user_id?: string | null;
+  nome: string;
+  ativa: 0 | 1;
+  observacao?: string;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+type CategoriaMovimentacaoRecord = {
+  id: string;
+  user_id?: string | null;
+  nome: string;
+  tipo: TipoCategoriaMovimentacao;
+  ativa: 0 | 1;
+  observacao?: string;
   criado_em: string;
   atualizado_em: string;
 };
@@ -39,11 +95,15 @@ type ContaBancariaRecord = {
   user_id: string;
   nome: string;
   banco?: string;
-  tipo: ContaBancaria["tipo"];
+  agencia?: string;
+  numero_conta?: string;
+  digito_conta?: string;
+  tipo: TipoContaBancaria;
   saldo_inicial: number;
   saldo_atual: number;
   limite: number;
   ativa: 0 | 1;
+  observacao?: string;
   criado_em: string;
   atualizado_em: string;
 };
@@ -52,7 +112,10 @@ type CartaoCreditoRecord = {
   id: string;
   user_id: string;
   nome: string;
+  bandeira_id?: string | null;
   bandeira?: string;
+  tipo_cartao?: TipoCartao;
+  status?: StatusCartao;
   numero_mascarado?: string | null;
   validade?: string | null;
   limite_total: number;
@@ -60,6 +123,22 @@ type CartaoCreditoRecord = {
   dia_vencimento: number;
   conta_pagamento_id?: string | null;
   ativo: 0 | 1;
+  observacao?: string;
+  criado_em: string;
+  atualizado_em: string;
+};
+
+type RendaRecord = {
+  id: string;
+  user_id: string;
+  descricao: string;
+  tipo_renda: TipoRenda;
+  empresa_origem?: string;
+  valor: number;
+  data_recebimento?: string;
+  recorrente: 0 | 1;
+  ativa: 0 | 1;
+  observacao?: string;
   criado_em: string;
   atualizado_em: string;
 };
@@ -72,6 +151,7 @@ type FaturaRecord = {
   ano: number;
   status_pago: 0 | 1;
   valor_total: number;
+  observacao?: string;
   criado_em: string;
   atualizado_em: string;
 };
@@ -82,6 +162,7 @@ type MovimentacaoRecord = {
   conta_id?: string | null;
   cartao_id?: string | null;
   fatura_id?: string | null;
+  categoria_id?: string | null;
   tipo: "entrada" | "saida";
   descricao: string;
   categoria?: string;
@@ -92,6 +173,7 @@ type MovimentacaoRecord = {
   total_parcelas: number;
   id_agrupador_parcela?: string | null;
   observacao?: string;
+  excluida?: 0 | 1;
   criado_em: string;
   atualizado_em: string;
 };
@@ -118,6 +200,7 @@ function toMovimentacao(record: MovimentacaoRecord): Movimentacao {
     contaId: record.conta_id,
     cartaoId: record.cartao_id,
     faturaId: record.fatura_id,
+    categoriaId: record.categoria_id,
     tipo: record.tipo,
     descricao: record.descricao,
     categoria: record.categoria,
@@ -138,7 +221,10 @@ function toCartao(record: CartaoCreditoRecord): CartaoCredito {
     id: record.id,
     userId: record.user_id,
     nome: record.nome,
+    bandeiraId: record.bandeira_id,
     bandeira: record.bandeira,
+    tipoCartao: record.tipo_cartao ?? "credito",
+    status: record.status ?? "ativo",
     numeroMascarado: record.numero_mascarado,
     validade: record.validade,
     limiteTotal: record.limite_total,
@@ -146,6 +232,7 @@ function toCartao(record: CartaoCreditoRecord): CartaoCredito {
     diaVencimento: record.dia_vencimento,
     contaPagamentoId: record.conta_pagamento_id,
     ativo: Boolean(record.ativo),
+    observacao: record.observacao,
   };
 }
 
@@ -155,11 +242,62 @@ function toConta(record: ContaBancariaRecord): ContaBancaria {
     userId: record.user_id,
     nome: record.nome,
     banco: record.banco,
+    agencia: record.agencia,
+    numeroConta: record.numero_conta,
+    digitoConta: record.digito_conta,
     tipo: record.tipo,
     saldoInicial: record.saldo_inicial,
     saldoAtual: record.saldo_atual,
     limite: record.limite,
     ativa: Boolean(record.ativa),
+    observacao: record.observacao,
+  };
+}
+
+function toDadosComplementares(record: UsuarioDadosComplementaresRecord): UsuarioDadosComplementares {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    telefone: record.telefone,
+    documento: record.documento,
+    dataNascimento: record.data_nascimento,
+    observacao: record.observacao,
+  };
+}
+
+function toBandeira(record: BandeiraCartaoRecord): BandeiraCartao {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    nome: record.nome,
+    ativa: Boolean(record.ativa),
+    observacao: record.observacao,
+  };
+}
+
+function toCategoria(record: CategoriaMovimentacaoRecord): CategoriaMovimentacao {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    nome: record.nome,
+    tipo: record.tipo,
+    ativa: Boolean(record.ativa),
+    observacao: record.observacao,
+  };
+}
+
+function toRenda(record: RendaRecord): Renda {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    descricao: record.descricao,
+    tipoRenda: record.tipo_renda,
+    empresaOrigem: record.empresa_origem,
+    valor: record.valor,
+    dataRecebimento: record.data_recebimento,
+    recorrente: Boolean(record.recorrente),
+    ativa: Boolean(record.ativa),
+    observacao: record.observacao,
   };
 }
 
@@ -177,6 +315,7 @@ function toFatura(record: FaturaRecord, card?: CartaoCreditoRecord): FaturaAtual
     statusPago: Boolean(record.status_pago),
     valorTotal: record.valor_total,
     dataVencimento: dueDate,
+    observacao: record.observacao,
   };
 }
 
@@ -251,6 +390,7 @@ export class FinanceRepository implements IFinanceRepository {
       conta_id: movimentacao.contaId,
       cartao_id: movimentacao.cartaoId,
       fatura_id: faturaId,
+      categoria_id: movimentacao.categoriaId,
       tipo: movimentacao.tipo,
       descricao: movimentacao.descricao,
       categoria: movimentacao.categoria,
@@ -261,6 +401,7 @@ export class FinanceRepository implements IFinanceRepository {
       total_parcelas: movimentacao.totalParcelas ?? 1,
       id_agrupador_parcela: movimentacao.idAgrupadorParcela,
       observacao: movimentacao.observacao,
+      excluida: 0,
       criado_em: timestamp,
       atualizado_em: timestamp,
     };
@@ -276,6 +417,65 @@ export class FinanceRepository implements IFinanceRepository {
     return toMovimentacao(record);
   }
 
+  async atualizarMovimentacao(id: string, movimentacao: Partial<MovimentacaoInput>): Promise<Movimentacao> {
+    const existing = await this.getById<MovimentacaoRecord>("movimentacoes", id);
+    if (!existing || existing.excluida) {
+      throw new Error("Movimentacao nao encontrada.");
+    }
+
+    const previousInvoiceId = existing.fatura_id;
+    const nextCardId = movimentacao.cartaoId !== undefined ? movimentacao.cartaoId : existing.cartao_id;
+    const nextDate = movimentacao.dataMovimento ?? existing.data_movimento;
+    const card = nextCardId ? await this.getById<CartaoCreditoRecord>("cartoes_credito", nextCardId) : null;
+    const nextInvoiceId =
+      movimentacao.faturaId !== undefined
+        ? movimentacao.faturaId
+        : nextCardId
+          ? (await this.findOrCreateInvoice(existing.user_id, nextCardId, nextDate, card ?? undefined)).id
+          : null;
+
+    const updated: MovimentacaoRecord = {
+      ...existing,
+      conta_id: movimentacao.contaId !== undefined ? movimentacao.contaId : existing.conta_id,
+      cartao_id: nextCardId,
+      fatura_id: nextInvoiceId,
+      categoria_id: movimentacao.categoriaId !== undefined ? movimentacao.categoriaId : existing.categoria_id,
+      tipo: movimentacao.tipo ?? existing.tipo,
+      descricao: movimentacao.descricao ?? existing.descricao,
+      categoria: movimentacao.categoria !== undefined ? movimentacao.categoria : existing.categoria,
+      valor: movimentacao.valor ?? existing.valor,
+      data_movimento: nextDate,
+      forma_pagamento: movimentacao.formaPagamento !== undefined ? movimentacao.formaPagamento : existing.forma_pagamento,
+      parcela_atual: movimentacao.parcelaAtual ?? existing.parcela_atual,
+      total_parcelas: movimentacao.totalParcelas ?? existing.total_parcelas,
+      id_agrupador_parcela:
+        movimentacao.idAgrupadorParcela !== undefined ? movimentacao.idAgrupadorParcela : existing.id_agrupador_parcela,
+      observacao: movimentacao.observacao !== undefined ? movimentacao.observacao : existing.observacao,
+      atualizado_em: now(),
+    };
+
+    await this.put("movimentacoes", updated);
+    if (previousInvoiceId) await this.recalculateInvoiceTotal(previousInvoiceId);
+    if (nextInvoiceId && nextInvoiceId !== previousInvoiceId) await this.recalculateInvoiceTotal(nextInvoiceId);
+
+    return toMovimentacao(updated);
+  }
+
+  async excluirMovimentacao(id: string): Promise<void> {
+    const existing = await this.getById<MovimentacaoRecord>("movimentacoes", id);
+    if (!existing) return;
+
+    await this.put("movimentacoes", {
+      ...existing,
+      excluida: 1,
+      atualizado_em: now(),
+    });
+
+    if (existing.fatura_id) {
+      await this.recalculateInvoiceTotal(existing.fatura_id);
+    }
+  }
+
   async buscarResumoMensal(params: BuscarResumoMensalParams): Promise<ResumoMensal> {
     this.getWebDatabase();
     const [accounts, cards, invoices, transactions] = await Promise.all([
@@ -286,7 +486,8 @@ export class FinanceRepository implements IFinanceRepository {
     ]);
 
     const { start, end } = monthRange(params.mes, params.ano);
-    const monthlyTransactions = transactions.filter(
+    const activeTransactions = transactions.filter((item) => !item.excluida);
+    const monthlyTransactions = activeTransactions.filter(
       (item) => item.data_movimento >= start && item.data_movimento <= end,
     );
 
@@ -303,7 +504,7 @@ export class FinanceRepository implements IFinanceRepository {
       { totalEntradas: 0, totalSaidas: 0 },
     );
 
-    const accountTransactions = transactions.filter((item) => !item.cartao_id);
+    const accountTransactions = activeTransactions.filter((item) => !item.cartao_id);
     const movementBalance = accountTransactions.reduce(
       (saldo, item) => (item.tipo === "entrada" ? saldo + item.valor : saldo - item.valor),
       0,
@@ -312,7 +513,7 @@ export class FinanceRepository implements IFinanceRepository {
     const initialAccountsBalance = accounts.reduce((saldo, account) => saldo + account.saldo_inicial, 0);
     const currentOpenInvoices = await Promise.all(
       cards
-        .filter((card) => card.ativo)
+        .filter((card) => card.ativo && (card.status ?? "ativo") === "ativo")
         .map(async (card) => {
           const period = invoicePeriodFor(currentDateValue(), card);
           const invoice =
@@ -328,7 +529,7 @@ export class FinanceRepository implements IFinanceRepository {
       return total + (item.invoice?.status_pago ? 0 : (item.invoice?.valor_total ?? 0));
     }, 0);
     const creditLimitTotal = cards
-      .filter((card) => card.ativo)
+      .filter((card) => card.ativo && (card.status ?? "ativo") === "ativo")
       .reduce((total, card) => total + card.limite_total, 0);
     const creditLimitAvailable = Math.max(creditLimitTotal - currentInvoiceTotal, 0);
     const openInvoiceTotal = invoices
@@ -364,6 +565,95 @@ export class FinanceRepository implements IFinanceRepository {
     return invoice ? toFatura(invoice, card) : null;
   }
 
+  async salvarDadosComplementaresUsuario(
+    dados: UsuarioDadosComplementaresInput,
+  ): Promise<UsuarioDadosComplementares> {
+    const existing = (await this.getAllByUser<UsuarioDadosComplementaresRecord>(
+      "usuarios_dados_complementares",
+      dados.userId,
+    ))[0];
+    const timestamp = now();
+    const record: UsuarioDadosComplementaresRecord = {
+      id: existing?.id ?? createId(),
+      user_id: dados.userId,
+      telefone: dados.telefone,
+      documento: dados.documento,
+      data_nascimento: dados.dataNascimento,
+      observacao: dados.observacao,
+      criado_em: existing?.criado_em ?? timestamp,
+      atualizado_em: timestamp,
+    };
+
+    await this.put("usuarios_dados_complementares", record);
+    return toDadosComplementares(record);
+  }
+
+  async buscarDadosComplementaresUsuario(userId: string): Promise<UsuarioDadosComplementares | null> {
+    const records = await this.getAllByUser<UsuarioDadosComplementaresRecord>("usuarios_dados_complementares", userId);
+    return records[0] ? toDadosComplementares(records[0]) : null;
+  }
+
+  async cadastrarConta(conta: ContaBancariaInput): Promise<ContaBancaria> {
+    const timestamp = now();
+    const record: ContaBancariaRecord = {
+      id: createId(),
+      user_id: conta.userId,
+      nome: conta.nome,
+      banco: conta.banco,
+      agencia: conta.agencia,
+      numero_conta: conta.numeroConta,
+      digito_conta: conta.digitoConta,
+      tipo: conta.tipo,
+      saldo_inicial: conta.saldoInicial,
+      saldo_atual: conta.saldoAtual,
+      limite: conta.limite,
+      ativa: conta.ativa === false ? 0 : 1,
+      observacao: conta.observacao,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
+
+    await this.put("contas_bancarias", record);
+    return toConta(record);
+  }
+
+  async atualizarConta(id: string, conta: Partial<ContaBancariaInput>): Promise<ContaBancaria> {
+    const existing = await this.getById<ContaBancariaRecord>("contas_bancarias", id);
+    if (!existing) {
+      throw new Error("Conta nao encontrada.");
+    }
+
+    const updated: ContaBancariaRecord = {
+      ...existing,
+      nome: conta.nome ?? existing.nome,
+      banco: conta.banco !== undefined ? conta.banco : existing.banco,
+      agencia: conta.agencia !== undefined ? conta.agencia : existing.agencia,
+      numero_conta: conta.numeroConta !== undefined ? conta.numeroConta : existing.numero_conta,
+      digito_conta: conta.digitoConta !== undefined ? conta.digitoConta : existing.digito_conta,
+      tipo: conta.tipo ?? existing.tipo,
+      saldo_inicial: conta.saldoInicial ?? existing.saldo_inicial,
+      saldo_atual: conta.saldoAtual ?? existing.saldo_atual,
+      limite: conta.limite ?? existing.limite,
+      ativa: conta.ativa === undefined ? existing.ativa : conta.ativa ? 1 : 0,
+      observacao: conta.observacao !== undefined ? conta.observacao : existing.observacao,
+      atualizado_em: now(),
+    };
+
+    await this.put("contas_bancarias", updated);
+    return toConta(updated);
+  }
+
+  async excluirConta(id: string): Promise<void> {
+    const existing = await this.getById<ContaBancariaRecord>("contas_bancarias", id);
+    if (!existing) return;
+
+    await this.put("contas_bancarias", {
+      ...existing,
+      ativa: 0,
+      atualizado_em: now(),
+    });
+  }
+
   async cadastrarCartao(cartao: CartaoCreditoInput): Promise<CartaoCredito> {
     this.getWebDatabase();
     const timestamp = now();
@@ -371,7 +661,10 @@ export class FinanceRepository implements IFinanceRepository {
       id: createId(),
       user_id: cartao.userId,
       nome: cartao.nome,
+      bandeira_id: cartao.bandeiraId,
       bandeira: cartao.bandeira,
+      tipo_cartao: cartao.tipoCartao ?? "credito",
+      status: cartao.status ?? "ativo",
       numero_mascarado: cartao.numeroMascarado,
       validade: cartao.validade,
       limite_total: cartao.limiteTotal,
@@ -379,12 +672,159 @@ export class FinanceRepository implements IFinanceRepository {
       dia_vencimento: cartao.diaVencimento,
       conta_pagamento_id: cartao.contaPagamentoId,
       ativo: 1,
+      observacao: cartao.observacao,
       criado_em: timestamp,
       atualizado_em: timestamp,
     };
 
     await this.put("cartoes_credito", record);
     return toCartao(record);
+  }
+
+  async atualizarCartao(id: string, cartao: Partial<CartaoCreditoInput>): Promise<CartaoCredito> {
+    const existing = await this.getById<CartaoCreditoRecord>("cartoes_credito", id);
+    if (!existing) {
+      throw new Error("Cartao nao encontrado.");
+    }
+
+    const updated: CartaoCreditoRecord = {
+      ...existing,
+      nome: cartao.nome ?? existing.nome,
+      bandeira_id: cartao.bandeiraId !== undefined ? cartao.bandeiraId : existing.bandeira_id,
+      bandeira: cartao.bandeira !== undefined ? cartao.bandeira : existing.bandeira,
+      tipo_cartao: cartao.tipoCartao ?? existing.tipo_cartao ?? "credito",
+      status: cartao.status ?? existing.status ?? "ativo",
+      numero_mascarado: cartao.numeroMascarado !== undefined ? cartao.numeroMascarado : existing.numero_mascarado,
+      validade: cartao.validade !== undefined ? cartao.validade : existing.validade,
+      limite_total: cartao.limiteTotal ?? existing.limite_total,
+      dia_fechamento: cartao.diaFechamento ?? existing.dia_fechamento,
+      dia_vencimento: cartao.diaVencimento ?? existing.dia_vencimento,
+      conta_pagamento_id:
+        cartao.contaPagamentoId !== undefined ? cartao.contaPagamentoId : existing.conta_pagamento_id,
+      observacao: cartao.observacao !== undefined ? cartao.observacao : existing.observacao,
+      atualizado_em: now(),
+    };
+
+    await this.put("cartoes_credito", updated);
+    return toCartao(updated);
+  }
+
+  async excluirCartao(id: string): Promise<void> {
+    const existing = await this.getById<CartaoCreditoRecord>("cartoes_credito", id);
+    if (!existing) return;
+
+    await this.put("cartoes_credito", {
+      ...existing,
+      ativo: 0,
+      atualizado_em: now(),
+    });
+  }
+
+  async cadastrarRenda(renda: RendaInput): Promise<Renda> {
+    const timestamp = now();
+    const record: RendaRecord = {
+      id: createId(),
+      user_id: renda.userId,
+      descricao: renda.descricao,
+      tipo_renda: renda.tipoRenda,
+      empresa_origem: renda.empresaOrigem,
+      valor: renda.valor,
+      data_recebimento: renda.dataRecebimento,
+      recorrente: renda.recorrente === false ? 0 : 1,
+      ativa: renda.ativa === false ? 0 : 1,
+      observacao: renda.observacao,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
+
+    await this.put("rendas", record);
+    return toRenda(record);
+  }
+
+  async atualizarRenda(id: string, renda: Partial<RendaInput>): Promise<Renda> {
+    const existing = await this.getById<RendaRecord>("rendas", id);
+    if (!existing) {
+      throw new Error("Renda nao encontrada.");
+    }
+
+    const updated: RendaRecord = {
+      ...existing,
+      descricao: renda.descricao ?? existing.descricao,
+      tipo_renda: renda.tipoRenda ?? existing.tipo_renda,
+      empresa_origem: renda.empresaOrigem !== undefined ? renda.empresaOrigem : existing.empresa_origem,
+      valor: renda.valor ?? existing.valor,
+      data_recebimento: renda.dataRecebimento !== undefined ? renda.dataRecebimento : existing.data_recebimento,
+      recorrente: renda.recorrente === undefined ? existing.recorrente : renda.recorrente ? 1 : 0,
+      ativa: renda.ativa === undefined ? existing.ativa : renda.ativa ? 1 : 0,
+      observacao: renda.observacao !== undefined ? renda.observacao : existing.observacao,
+      atualizado_em: now(),
+    };
+
+    await this.put("rendas", updated);
+    return toRenda(updated);
+  }
+
+  async excluirRenda(id: string): Promise<void> {
+    const existing = await this.getById<RendaRecord>("rendas", id);
+    if (!existing) return;
+
+    await this.put("rendas", {
+      ...existing,
+      ativa: 0,
+      atualizado_em: now(),
+    });
+  }
+
+  async listarRendas(userId: string): Promise<Renda[]> {
+    const records = await this.getAllByUser<RendaRecord>("rendas", userId);
+    return records.filter((renda) => renda.ativa).map(toRenda);
+  }
+
+  async listarBandeirasCartao(userId: string): Promise<BandeiraCartao[]> {
+    const records = await this.getAll<BandeiraCartaoRecord>("bandeiras_cartao");
+    return records
+      .filter((bandeira) => bandeira.ativa && (!bandeira.user_id || bandeira.user_id === userId))
+      .map(toBandeira);
+  }
+
+  async cadastrarBandeiraCartao(bandeira: BandeiraCartaoInput): Promise<BandeiraCartao> {
+    const timestamp = now();
+    const record: BandeiraCartaoRecord = {
+      id: createId(),
+      user_id: bandeira.userId,
+      nome: bandeira.nome,
+      ativa: bandeira.ativa === false ? 0 : 1,
+      observacao: bandeira.observacao,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
+
+    await this.put("bandeiras_cartao", record);
+    return toBandeira(record);
+  }
+
+  async listarCategoriasMovimentacao(userId: string): Promise<CategoriaMovimentacao[]> {
+    const records = await this.getAll<CategoriaMovimentacaoRecord>("categorias_movimentacao");
+    return records
+      .filter((categoria) => categoria.ativa && (!categoria.user_id || categoria.user_id === userId))
+      .map(toCategoria);
+  }
+
+  async cadastrarCategoriaMovimentacao(categoria: CategoriaMovimentacaoInput): Promise<CategoriaMovimentacao> {
+    const timestamp = now();
+    const record: CategoriaMovimentacaoRecord = {
+      id: createId(),
+      user_id: categoria.userId,
+      nome: categoria.nome,
+      tipo: categoria.tipo,
+      ativa: categoria.ativa === false ? 0 : 1,
+      observacao: categoria.observacao,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
+
+    await this.put("categorias_movimentacao", record);
+    return toCategoria(record);
   }
 
   async listarContas(userId: string): Promise<ContaBancaria[]> {
@@ -460,12 +900,55 @@ export class FinanceRepository implements IFinanceRepository {
       email: user.email,
       foto_url: user.photoUrl,
       provedor_auth: user.authProvider,
+      ultimo_login_em: timestamp,
       criado_em: timestamp,
       atualizado_em: timestamp,
     };
 
     const existingAccounts = await this.getAllByUser<ContaBancariaRecord>("contas_bancarias", user.id);
+    const existingBrands = await this.getAll<BandeiraCartaoRecord>("bandeiras_cartao");
+    const existingCategories = await this.getAll<CategoriaMovimentacaoRecord>("categorias_movimentacao");
     const accountsToCreate: ContaBancariaRecord[] = [];
+    const defaultBrands = ["Visa", "Mastercard", "Elo", "Hipercard", "American Express", "Nubank", "Mercado Pago"];
+    const defaultCategories: Array<{ nome: string; tipo: TipoCategoriaMovimentacao }> = [
+      { nome: "Alimentacao", tipo: "saida" },
+      { nome: "Transporte", tipo: "saida" },
+      { nome: "Moradia", tipo: "saida" },
+      { nome: "Saude", tipo: "saida" },
+      { nome: "Educacao", tipo: "saida" },
+      { nome: "Lazer", tipo: "saida" },
+      { nome: "Cartao de credito", tipo: "saida" },
+      { nome: "Salario", tipo: "entrada" },
+      { nome: "Renda extra", tipo: "entrada" },
+      { nome: "Investimentos", tipo: "ambos" },
+      { nome: "Outros", tipo: "ambos" },
+    ];
+    const brandsToCreate = defaultBrands
+      .filter((brand) => !existingBrands.some((item) => !item.user_id && item.nome.toLowerCase() === brand.toLowerCase()))
+      .map<BandeiraCartaoRecord>((brand) => ({
+        id: `default-brand-${brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        user_id: null,
+        nome: brand,
+        ativa: 1,
+        criado_em: timestamp,
+        atualizado_em: timestamp,
+      }));
+    const categoriesToCreate = defaultCategories
+      .filter(
+        (category) =>
+          !existingCategories.some(
+            (item) => !item.user_id && item.nome.toLowerCase() === category.nome.toLowerCase() && item.tipo === category.tipo,
+          ),
+      )
+      .map<CategoriaMovimentacaoRecord>((category) => ({
+        id: `default-category-${category.tipo}-${category.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        user_id: null,
+        nome: category.nome,
+        tipo: category.tipo,
+        ativa: 1,
+        criado_em: timestamp,
+        atualizado_em: timestamp,
+      }));
 
     if (!existingAccounts.some((account) => account.nome === "Carteira")) {
       accountsToCreate.push(
@@ -474,6 +957,9 @@ export class FinanceRepository implements IFinanceRepository {
         user_id: user.id,
         nome: "Carteira",
         banco: "Dinheiro",
+        agencia: undefined,
+        numero_conta: undefined,
+        digito_conta: undefined,
         tipo: "carteira",
         saldo_inicial: 0,
         saldo_atual: 0,
@@ -492,6 +978,9 @@ export class FinanceRepository implements IFinanceRepository {
         user_id: user.id,
         nome: "Conta Corrente",
         banco: "Banco principal",
+        agencia: undefined,
+        numero_conta: undefined,
+        digito_conta: undefined,
         tipo: "corrente",
         saldo_inicial: 0,
         saldo_atual: 0,
@@ -512,6 +1001,8 @@ export class FinanceRepository implements IFinanceRepository {
           user_id: user.id,
           nome: "Cartao Principal",
           bandeira: "Visa",
+          tipo_cartao: "credito",
+          status: "ativo",
           limite_total: 1500,
           dia_fechamento: 8,
           dia_vencimento: 15,
@@ -521,15 +1012,18 @@ export class FinanceRepository implements IFinanceRepository {
           atualizado_em: timestamp,
         };
 
-    if (existingUser && accountsToCreate.length === 0 && !defaultCard) return;
-    const transaction = this.getWebDatabase().transaction(["usuarios", "contas_bancarias", "cartoes_credito"], "readwrite");
-    if (!existingUser) {
-      transaction.objectStore("usuarios").put(userRecord);
-    }
+    if (existingUser && accountsToCreate.length === 0 && !defaultCard && brandsToCreate.length === 0 && categoriesToCreate.length === 0) return;
+    const transaction = this.getWebDatabase().transaction(
+      ["usuarios", "contas_bancarias", "cartoes_credito", "bandeiras_cartao", "categorias_movimentacao"],
+      "readwrite",
+    );
+    transaction.objectStore("usuarios").put(existingUser ? { ...existingUser, ultimo_login_em: timestamp, atualizado_em: timestamp } : userRecord);
     accountsToCreate.forEach((account) => transaction.objectStore("contas_bancarias").put(account));
     if (defaultCard) {
       transaction.objectStore("cartoes_credito").put(defaultCard);
     }
+    brandsToCreate.forEach((brand) => transaction.objectStore("bandeiras_cartao").put(brand));
+    categoriesToCreate.forEach((category) => transaction.objectStore("categorias_movimentacao").put(category));
     await transactionDone(transaction);
   }
 
@@ -573,6 +1067,8 @@ export class FinanceRepository implements IFinanceRepository {
       user_id: userId,
       nome: card.nome,
       bandeira: card.tipo,
+      tipo_cartao: card.tipo.toLowerCase().includes("deb") ? "credito_debito" : "credito",
+      status: "ativo",
       numero_mascarado: card.numero,
       validade: card.validade,
       limite_total: card.limiteTotal,
@@ -608,6 +1104,7 @@ export class FinanceRepository implements IFinanceRepository {
       total_parcelas: movement.totalParcelas ?? 1,
       id_agrupador_parcela: movement.idAgrupadorParcela,
       observacao: movement.observacao ?? undefined,
+      excluida: 0,
       criado_em: timestamp,
       atualizado_em: timestamp,
     };
@@ -622,7 +1119,7 @@ export class FinanceRepository implements IFinanceRepository {
     if (!invoice) return;
 
     invoice.valor_total = records
-      .filter((item) => item.fatura_id === faturaId && item.tipo === "saida")
+      .filter((item) => item.fatura_id === faturaId && item.tipo === "saida" && !item.excluida)
       .reduce((total, item) => total + item.valor, 0);
     invoice.atualizado_em = now();
 

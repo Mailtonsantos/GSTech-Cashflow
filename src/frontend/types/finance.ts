@@ -17,12 +17,18 @@ export type FinanceSummary = {
 };
 
 export type TipoMovimentacao = "entrada" | "saida";
+export type TipoCategoriaMovimentacao = TipoMovimentacao | "ambos";
+export type TipoContaBancaria = "carteira" | "corrente" | "poupanca" | "investimento" | "outros";
+export type TipoCartao = "credito" | "debito" | "credito_debito";
+export type StatusCartao = "ativo" | "bloqueado";
+export type TipoRenda = "clt" | "pf" | "informal" | "outros";
 
 export type MovimentacaoInput = {
   userId: string;
   contaId?: string | null;
   cartaoId?: string | null;
   faturaId?: string | null;
+  categoriaId?: string | null;
   tipo: TipoMovimentacao;
   descricao: string;
   categoria?: string;
@@ -38,13 +44,17 @@ export type MovimentacaoInput = {
 export type CartaoCreditoInput = {
   userId: string;
   nome: string;
+  bandeiraId?: string | null;
   bandeira?: string;
+  tipoCartao?: TipoCartao;
+  status?: StatusCartao;
   numeroMascarado?: string | null;
   validade?: string | null;
   limiteTotal: number;
   diaFechamento: number;
   diaVencimento: number;
   contaPagamentoId?: string | null;
+  observacao?: string;
 };
 
 export type ResumoMensal = {
@@ -70,13 +80,17 @@ export type FaturaAtual = {
   statusPago: boolean;
   valorTotal: number;
   dataVencimento?: string;
+  observacao?: string;
 };
 
 export type CartaoCredito = {
   id: string;
   userId: string;
   nome: string;
+  bandeiraId?: string | null;
   bandeira?: string;
+  tipoCartao: TipoCartao;
+  status: StatusCartao;
   numeroMascarado?: string | null;
   validade?: string | null;
   limiteTotal: number;
@@ -84,6 +98,7 @@ export type CartaoCredito = {
   diaVencimento: number;
   contaPagamentoId?: string | null;
   ativo: boolean;
+  observacao?: string;
 };
 
 export type Movimentacao = MovimentacaoInput & {
@@ -97,11 +112,73 @@ export type ContaBancaria = {
   userId: string;
   nome: string;
   banco?: string;
-  tipo: "carteira" | "corrente" | "poupanca" | "outros";
+  agencia?: string;
+  numeroConta?: string;
+  digitoConta?: string;
+  tipo: TipoContaBancaria;
   saldoInicial: number;
   saldoAtual: number;
   limite: number;
   ativa: boolean;
+  observacao?: string;
+};
+
+export type ContaBancariaInput = Omit<ContaBancaria, "id" | "ativa"> & {
+  ativa?: boolean;
+};
+
+export type UsuarioDadosComplementares = {
+  id: string;
+  userId: string;
+  telefone?: string;
+  documento?: string;
+  dataNascimento?: string;
+  observacao?: string;
+};
+
+export type UsuarioDadosComplementaresInput = Omit<UsuarioDadosComplementares, "id">;
+
+export type BandeiraCartao = {
+  id: string;
+  userId?: string | null;
+  nome: string;
+  ativa: boolean;
+  observacao?: string;
+};
+
+export type BandeiraCartaoInput = Omit<BandeiraCartao, "id" | "ativa"> & {
+  ativa?: boolean;
+};
+
+export type CategoriaMovimentacao = {
+  id: string;
+  userId?: string | null;
+  nome: string;
+  tipo: TipoCategoriaMovimentacao;
+  ativa: boolean;
+  observacao?: string;
+};
+
+export type CategoriaMovimentacaoInput = Omit<CategoriaMovimentacao, "id" | "ativa"> & {
+  ativa?: boolean;
+};
+
+export type Renda = {
+  id: string;
+  userId: string;
+  descricao: string;
+  tipoRenda: TipoRenda;
+  empresaOrigem?: string;
+  valor: number;
+  dataRecebimento?: string;
+  recorrente: boolean;
+  ativa: boolean;
+  observacao?: string;
+};
+
+export type RendaInput = Omit<Renda, "id" | "ativa" | "recorrente"> & {
+  recorrente?: boolean;
+  ativa?: boolean;
 };
 
 export type ImportedCreditCard = {
