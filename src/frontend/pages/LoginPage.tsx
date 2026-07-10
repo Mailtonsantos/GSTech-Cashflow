@@ -37,7 +37,7 @@ export function LoginPage({ isLoading, onGoogleLogin }: LoginPageProps) {
         </div>
 
         <div className="flex items-center px-6 py-10 sm:px-10">
-          <div className="w-full rounded-lg border border-cash-line bg-white p-6 shadow-soft">
+          <div className="w-full max-w-md rounded-lg border border-cash-line bg-white p-5 shadow-soft">
             <div>
               <p className="text-sm font-black uppercase text-cash-brand">Entrar</p>
               <h2 className="mt-2 text-2xl font-black text-cash-ink">Acesse sua area financeira</h2>
@@ -48,7 +48,7 @@ export function LoginPage({ isLoading, onGoogleLogin }: LoginPageProps) {
             </div>
 
             <Button
-              className="mt-6 w-full bg-cash-brand text-white hover:bg-cash-brandDark"
+              className="mt-5 w-full bg-cash-brand text-white hover:bg-cash-brandDark"
               disabled={isLoading}
               onClick={onGoogleLogin}
               type="button"

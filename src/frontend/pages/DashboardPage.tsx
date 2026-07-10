@@ -12,6 +12,12 @@ const money = (value: number) =>
     currency: "BRL",
   }).format(value);
 
+const compactLabelClass = "block text-xs font-medium text-slate-600";
+const compactFieldClass =
+  "mt-1 w-full rounded-lg border border-cash-line px-3 py-1.5 text-sm text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10";
+const compactButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-cash-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-cash-brandDark disabled:opacity-60";
+
 type DashboardPageProps = {
   userId: string;
 };
@@ -122,9 +128,9 @@ export function DashboardPage({ userId }: DashboardPageProps) {
       </section>
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.8fr]">
-        <div className="rounded-lg border border-cash-line bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-cash-line bg-white p-4 shadow-sm">
           <h2 className="text-lg font-black text-cash-ink">Resumo do mes</h2>
-          <div className="mt-5 grid gap-3">
+          <div className="mt-4 grid gap-3">
             <SummaryRow label="Entradas" value={money(summary.monthlyIncome)} tone="text-emerald-700" />
             <SummaryRow label="Saidas" value={money(summary.monthlyExpense)} tone="text-rose-700" />
             <SummaryRow label="Resultado" value={money(summary.monthBalance)} tone="text-cash-brand" />
@@ -139,7 +145,7 @@ export function DashboardPage({ userId }: DashboardPageProps) {
       </section>
 
       <section className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.8fr]">
-        <div className="rounded-lg border border-cash-line bg-white p-5 shadow-sm lg:col-start-2">
+        <div className="rounded-lg border border-cash-line bg-white p-4 shadow-sm lg:col-start-2">
           <h2 className="text-lg font-black text-cash-ink">Proxima fatura</h2>
           <p className="mt-4 text-3xl font-black text-cash-ink">{money(summary.cardInvoiceTotal)}</p>
           <p className="mt-2 text-sm leading-6 text-cash-muted">
@@ -195,19 +201,19 @@ function NewTransactionForm({
   }
 
   return (
-    <form className="rounded-lg border border-cash-line bg-white p-5 shadow-sm" onSubmit={handleSubmit}>
+    <form className="w-full max-w-lg rounded-lg border border-cash-line bg-white p-4 shadow-sm" onSubmit={handleSubmit}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-black text-cash-ink">Novo lancamento</h2>
-        <div className="grid size-10 place-items-center rounded-lg bg-teal-50 text-cash-brand">
-          <Plus size={20} />
+        <div className="grid size-9 place-items-center rounded-lg bg-teal-50 text-cash-brand">
+          <Plus size={18} />
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3">
-        <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+      <div className="mt-4 space-y-3">
+        <label className={compactLabelClass}>
           Descricao
           <input
-            className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+            className={compactFieldClass}
             value={form.description}
             onChange={(event) => setForm({ ...form, description: event.target.value })}
             placeholder="Ex: Mercado, salario, internet"
@@ -216,10 +222,10 @@ function NewTransactionForm({
         </label>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          <label className={compactLabelClass}>
             Tipo
             <select
-              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              className={compactFieldClass}
               value={form.type}
               onChange={(event) => setForm({ ...form, type: event.target.value as TipoMovimentacao })}
             >
@@ -228,10 +234,10 @@ function NewTransactionForm({
             </select>
           </label>
 
-          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          <label className={compactLabelClass}>
             Destino
             <select
-              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              className={compactFieldClass}
               value={form.paymentTarget}
               onChange={(event) => setForm({ ...form, paymentTarget: event.target.value as "conta" | "cartao" })}
             >
@@ -244,10 +250,10 @@ function NewTransactionForm({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          <label className={compactLabelClass}>
             Valor
             <input
-              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              className={compactFieldClass}
               min="0.01"
               step="0.01"
               type="number"
@@ -257,10 +263,10 @@ function NewTransactionForm({
             />
           </label>
 
-          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          <label className={compactLabelClass}>
             Data
             <input
-              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              className={compactFieldClass}
               type="date"
               value={form.date}
               onChange={(event) => setForm({ ...form, date: event.target.value })}
@@ -269,10 +275,10 @@ function NewTransactionForm({
           </label>
         </div>
 
-        <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+        <label className={compactLabelClass}>
           Categoria
           <input
-            className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+            className={compactFieldClass}
             value={form.category}
             onChange={(event) => setForm({ ...form, category: event.target.value })}
             placeholder="Ex: Alimentacao, renda, transporte"
@@ -280,7 +286,7 @@ function NewTransactionForm({
         </label>
 
         <button
-          className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cash-brand px-4 py-2 text-sm font-black text-white transition hover:bg-cash-brandDark disabled:opacity-60"
+          className={compactButtonClass}
           disabled={isSaving}
           type="submit"
         >
