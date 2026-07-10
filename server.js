@@ -13,6 +13,12 @@ const types = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
+const noCacheHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
   const mappedPath = url.pathname.startsWith("/assets/")
@@ -25,11 +31,14 @@ createServer(async (request, response) => {
 
   try {
     const content = await readFile(filePath);
-    response.writeHead(200, { "Content-Type": types[extname(filePath)] || "application/octet-stream" });
+    response.writeHead(200, {
+      "Content-Type": types[extname(filePath)] || "application/octet-stream",
+      ...noCacheHeaders,
+    });
     response.end(content);
   } catch {
     const content = await readFile(join(root, "index.html"));
-    response.writeHead(200, { "Content-Type": types[".html"] });
+    response.writeHead(200, { "Content-Type": types[".html"], ...noCacheHeaders });
     response.end(content);
   }
 }).listen(port, "127.0.0.1", () => {
