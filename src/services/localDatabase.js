@@ -1,7 +1,10 @@
-const databaseVersion = 1;
+const databaseVersion = 2;
 
 const stores = {
   users: "usuarios",
+  userDetails: "usuarios_dados_complementares",
+  cardBrands: "bandeiras_cartao",
+  categories: "categorias_movimentacao",
   bankAccounts: "contas_bancarias",
   creditCards: "cartoes_credito",
   incomes: "rendas",
@@ -9,6 +12,9 @@ const stores = {
 };
 
 const userScopedStores = [
+  stores.userDetails,
+  stores.cardBrands,
+  stores.categories,
   stores.bankAccounts,
   stores.creditCards,
   stores.incomes,
@@ -82,5 +88,9 @@ export const LocalDatabaseService = {
     return run(db, storeName, "readonly", (store) =>
       requestToPromise(store.index("user_id").getAll(userId))
     );
+  },
+
+  async getAll(db, storeName) {
+    return run(db, storeName, "readonly", (store) => requestToPromise(store.getAll()));
   },
 };

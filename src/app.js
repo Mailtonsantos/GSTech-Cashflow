@@ -25,6 +25,7 @@ const state = {
   data: null,
   view: "Resumo",
   loading: true,
+  editing: {},
 };
 
 bootstrap();
@@ -49,6 +50,7 @@ async function startUserSession(user, persistSession = true) {
 
   state.user = user;
   state.data = await state.repository.getSnapshot();
+  state.repository.setSnapshot(state.data);
   state.loading = false;
 
   if (persistSession) {
@@ -60,6 +62,7 @@ async function startUserSession(user, persistSession = true) {
 
 async function refreshData() {
   state.data = await state.repository.getSnapshot();
+  state.repository.setSnapshot(state.data);
   render();
 }
 
@@ -69,6 +72,7 @@ function logout() {
   state.repository = null;
   state.data = null;
   state.view = "Resumo";
+  state.editing = {};
   render();
 }
 
@@ -127,6 +131,7 @@ function shellTemplate() {
     ["Contas", icons.account],
     ["Cartoes", icons.card],
     ["Rendas", icons.income],
+    ["Categorias", icons.movement],
     ["Movimentos", icons.movement],
   ];
 
@@ -154,6 +159,7 @@ function viewTemplate() {
   if (state.view === "Contas") return accountsTemplate();
   if (state.view === "Cartoes") return cardsTemplate();
   if (state.view === "Rendas") return incomesTemplate();
+  if (state.view === "Categorias") return categoriesTemplate();
   if (state.view === "Movimentos") return transactionsTemplate();
   return summaryTemplate();
 }
@@ -197,58 +203,174 @@ function transactionRow(item) {
 }
 
 function accountsTemplate() {
-  return twoColumnTemplate("account-form", "Nova conta", `
-    ${input("name", "Nome", "text")}
-    ${input("bank", "Banco", "text")}
-    ${input("balance", "Saldo atual", "number")}
-    ${input("limit", "Limite/cheque especial", "number")}
+  const editing = editingItem("accounts");
+  return twoColumnTemplate("account-form", editing ? "Editar conta" : "Nova conta", `
+    ${hiddenId(editing)}
+    ${input("name", "Nome", "text", editing?.name)}
+    ${input("bank", "Banco", "text", editing?.bank)}
+    <div class="form-grid">
+      ${input("agency", "Agencia", "text", editing?.agency)}
+      ${input("accountNumber", "Conta", "text", editing?.accountNumber)}
+      ${input("accountDigit", "Digito", "text", editing?.accountDigit)}
+    </div>
+    <label>Tipo
+      <select name="type">
+        ${option("carteira", "Carteira", editing?.type)}
+        ${option("corrente", "C/C", editing?.type)}
+        ${option("poupanca", "Poupanca", editing?.type)}
+        ${option("investimento", "Investimentos", editing?.type)}
+        ${option("outros", "Outros", editing?.type)}
+      </select>
+    </label>
+    ${input("balance", "Saldo atual", "number", editing?.balance)}
+    ${input("limit", "Limite/cheque especial", "number", editing?.limit)}
+    ${textarea("note", "Observacoes", editing?.note)}
   `, "Contas cadastradas", state.data.accounts.map((item) =>
-    itemCard(item.name, item.bank, money(item.balance), `Limite: ${money(item.limit)}`)
-  ).join(""));
+    itemCard("accounts", item.id, item.name, `${accountTypeLabel(item.type)} | ${item.bank || "Sem banco"}`, money(item.balance), `Ag ${item.agency || "-"} | Conta ${item.accountNumber || "-"} | Limite: ${money(item.limit)}`, item.note)
+  ).join(""), editing);
 }
 
 function cardsTemplate() {
-  return twoColumnTemplate("card-form", "Novo cartao", `
-    ${input("name", "Nome", "text")}
-    ${input("brand", "Bandeira", "text")}
-    ${input("limit", "Limite total", "number")}
-    ${input("used", "Valor usado", "number")}
-    ${input("closingDay", "Fechamento", "number", "8")}
-    ${input("dueDay", "Vencimento", "number", "15")}
+  const editing = editingItem("cards");
+  return twoColumnTemplate("card-form", editing ? "Editar cartao" : "Novo cartao", `
+    ${hiddenId(editing)}
+    ${input("name", "Nome", "text", editing?.name)}
+    <label>Bandeira
+      <select name="brand">
+        ${state.data.brands.map((brand) => option(brand.nome, brand.nome, editing?.brand)).join("")}
+      </select>
+    </label>
+    <div class="form-grid">
+      <label>Tipo do cartao
+        <select name="cardType">
+          ${option("credito", "Credito", editing?.cardType)}
+          ${option("debito", "Debito", editing?.cardType)}
+          ${option("credito_debito", "Credito/Debito", editing?.cardType)}
+        </select>
+      </label>
+      <label>Status
+        <select name="status">
+          ${option("ativo", "Ativo", editing?.status)}
+          ${option("bloqueado", "Bloqueado", editing?.status)}
+        </select>
+      </label>
+    </div>
+    ${input("number", "Numero do cartao", "text", editing?.number)}
+    ${input("validity", "Validade", "text", editing?.validity)}
+    ${input("limit", "Limite total", "number", editing?.limit)}
+    <div class="form-grid">
+      ${input("closingDay", "Fechamento", "number", editing?.closingDay || "8")}
+      ${input("dueDay", "Vencimento", "number", editing?.dueDay || "15")}
+    </div>
+    ${textarea("note", "Observacoes", editing?.note)}
   `, "Cartoes cadastrados", state.data.cards.map((item) =>
-    itemCard(item.name, `${item.brand} - fecha dia ${item.closingDay}`, money(item.limit - item.used), `Usado: ${money(item.used)} | Vence dia ${item.dueDay}`)
-  ).join(""));
+    itemCard("cards", item.id, item.name, `${item.brand || "Sem bandeira"} | ${cardTypeLabel(item.cardType)} | ${statusLabel(item.status)}`, money(item.limit - item.used), `Numero: ${item.number || "-"} | Val: ${item.validity || "-"} | Vence dia ${item.dueDay}`, item.note)
+  ).join(""), editing);
 }
 
 function incomesTemplate() {
-  return twoColumnTemplate("income-form", "Nova renda", `
-    ${input("source", "Origem", "text")}
-    ${input("amount", "Valor mensal", "number")}
-    ${input("day", "Dia de recebimento", "number", "5")}
+  const editing = editingItem("incomes");
+  return twoColumnTemplate("income-form", editing ? "Editar renda" : "Nova renda", `
+    ${hiddenId(editing)}
+    ${input("source", "Origem/descricao", "text", editing?.source)}
+    <label>Tipo de renda
+      <select name="incomeType">
+        ${option("clt", "CLT", editing?.incomeType)}
+        ${option("pf", "PF", editing?.incomeType)}
+        ${option("informal", "Informal", editing?.incomeType)}
+        ${option("outros", "Outros", editing?.incomeType)}
+      </select>
+    </label>
+    ${input("company", "Empresa de origem", "text", editing?.company)}
+    ${input("amount", "Valor mensal", "number", editing?.amount)}
+    ${input("date", "Data de recebimento", "date", editing?.date || today)}
+    <label class="checkbox-row"><input name="recurrent" type="checkbox" value="1" ${editing?.recurrent === false ? "" : "checked"} /> Renda recorrente</label>
+    ${textarea("note", "Observacoes", editing?.note)}
   `, "Rendas cadastradas", state.data.incomes.map((item) =>
-    itemCard(item.source, `Recebe dia ${item.day}`, money(item.amount), "Entrada recorrente")
-  ).join(""));
+    itemCard("incomes", item.id, item.source, `${incomeTypeLabel(item.incomeType)} | ${item.company || "Sem empresa"}`, money(item.amount), item.recurrent ? "Entrada recorrente" : "Entrada eventual", item.note)
+  ).join(""), editing);
+}
+
+function categoriesTemplate() {
+  return `
+    <section class="two-column">
+      <form class="entry-panel" id="category-form">
+        <div class="panel-title"><h3>Nova categoria</h3></div>
+        ${input("name", "Nome", "text")}
+        <label>Tipo
+          <select name="type">
+            ${option("saida", "Saida")}
+            ${option("entrada", "Entrada")}
+            ${option("ambos", "Ambos")}
+          </select>
+        </label>
+        ${textarea("note", "Observacoes")}
+        <button class="primary-button" type="submit">${icons.plus} <span>Adicionar categoria</span></button>
+      </form>
+      <form class="entry-panel" id="brand-form">
+        <div class="panel-title"><h3>Nova bandeira</h3></div>
+        ${input("name", "Nome", "text")}
+        ${textarea("note", "Observacoes")}
+        <button class="primary-button" type="submit">${icons.plus} <span>Adicionar bandeira</span></button>
+      </form>
+      <section class="list-panel">
+        <div class="panel-title"><h3>Categorias cadastradas</h3></div>
+        <div class="card-list">
+          ${state.data.categories.map((item) => catalogCard("categories", item.id, item.nome, categoryTypeLabel(item.tipo), item.observacao, Boolean(item.user_id))).join("")}
+        </div>
+      </section>
+      <section class="list-panel">
+        <div class="panel-title"><h3>Bandeiras cadastradas</h3></div>
+        <div class="card-list">
+          ${state.data.brands.map((item) => catalogCard("brands", item.id, item.nome, item.user_id ? "Personalizada" : "Padrao do sistema", item.observacao, Boolean(item.user_id))).join("")}
+        </div>
+      </section>
+    </section>
+  `;
 }
 
 function transactionsTemplate() {
-  return twoColumnTemplate("transaction-form", "Nova movimentacao", `
-    ${input("description", "Descricao", "text")}
-    <label>Tipo<select name="type"><option value="saida">Saida</option><option value="entrada">Entrada</option></select></label>
-    ${input("amount", "Valor", "number")}
-    ${input("category", "Categoria", "text")}
-    ${input("date", "Data", "date", today)}
+  const editing = editingItem("transactions");
+  return twoColumnTemplate("transaction-form", editing ? "Editar movimentacao" : "Nova movimentacao", `
+    ${hiddenId(editing)}
+    ${input("description", "Descricao", "text", editing?.description)}
+    <label>Tipo<select name="type">${option("saida", "Saida", editing?.type)}${option("entrada", "Entrada", editing?.type)}</select></label>
+    ${input("amount", "Valor", "number", editing?.amount)}
+    <label>Categoria
+      <select name="categoryId">
+        <option value="">Selecione</option>
+        ${state.data.categories.map((category) => option(category.id, `${category.nome} (${categoryTypeLabel(category.tipo)})`, editing?.categoryId)).join("")}
+      </select>
+    </label>
+    <label>Forma/Destino
+      <select name="paymentTarget">
+        ${option("conta", "Conta/Debito", editing?.paymentTarget)}
+        ${option("cartao", "Cartao de credito", editing?.paymentTarget)}
+      </select>
+    </label>
+    <label>Cartao
+      <select name="cardId">
+        <option value="">Sem cartao</option>
+        ${state.data.cards.map((card) => option(card.id, card.name, editing?.cardId)).join("")}
+      </select>
+    </label>
+    ${input("date", "Data", "date", editing?.date || today)}
+    ${textarea("note", "Observacoes", editing?.note)}
   `, "Historico", state.data.transactions.map((item) =>
-    itemCard(item.description, `${item.category} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, item.type === "entrada" ? "Entrada" : "Saida")
-  ).join(""));
+    itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, item.type === "entrada" ? "Entrada" : "Saida", item.note)
+  ).join(""), editing);
 }
 
-function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent) {
+function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null) {
   return `
     <section class="two-column">
       <form class="entry-panel" id="${formId}">
         <div class="panel-title"><h3>${formTitle}</h3></div>
         ${fields}
-        <button class="primary-button" type="submit">${icons.plus} <span>Adicionar</span></button>
+        <div class="button-row">
+          <button class="primary-button" type="submit">${icons.plus} <span>${editing ? "Salvar alteracoes" : "Adicionar"}</span></button>
+          ${editing ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+        </div>
       </form>
       <section class="list-panel">
         <div class="panel-title"><h3>${listTitle}</h3></div>
@@ -260,16 +382,95 @@ function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent) {
 
 function input(name, label, type, value = "") {
   const step = type === "number" ? ' min="0" step="0.01"' : "";
-  return `<label>${label}<input name="${name}" type="${type}" value="${value}"${step} required /></label>`;
+  return `<label>${label}<input name="${name}" type="${type}" value="${escapeAttribute(value ?? "")}"${step} ${type === "text" ? "" : "required"} /></label>`;
 }
 
-function itemCard(title, meta, value, detail) {
+function textarea(name, label, value = "") {
+  return `<label>${label}<textarea name="${name}" rows="3">${escapeHtml(value ?? "")}</textarea></label>`;
+}
+
+function hiddenId(item) {
+  return item ? `<input name="id" type="hidden" value="${escapeAttribute(item.id)}" />` : "";
+}
+
+function option(value, label, selectedValue = "") {
+  return `<option value="${escapeAttribute(value)}" ${String(value) === String(selectedValue || "") ? "selected" : ""}>${escapeHtml(label)}</option>`;
+}
+
+function editingItem(kind) {
+  const id = state.editing[kind];
+  return id ? state.data[kind].find((item) => item.id === id) : null;
+}
+
+function itemCard(kind, id, title, meta, value, detail, note = "") {
   return `
     <article class="item-card">
-      <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span></div>
-      <div class="item-value"><b>${escapeHtml(value)}</b><span>${escapeHtml(detail)}</span></div>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(meta)}</span>
+        ${note ? `<small>${escapeHtml(note)}</small>` : ""}
+      </div>
+      <div class="item-value">
+        <b>${escapeHtml(value)}</b>
+        <span>${escapeHtml(detail)}</span>
+        <div class="card-actions">
+          <button type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}">Editar</button>
+          <button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button>
+        </div>
+      </div>
     </article>
   `;
+}
+
+function catalogCard(kind, id, title, meta, note = "", canDelete = false) {
+  return `
+    <article class="item-card">
+      <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>
+      <div class="item-value">
+        <b>${canDelete ? "Personalizado" : "Padrao"}</b>
+        ${canDelete ? `<div class="card-actions"><button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button></div>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function accountTypeLabel(type) {
+  return {
+    carteira: "Carteira",
+    corrente: "C/C",
+    poupanca: "Poupanca",
+    investimento: "Investimentos",
+    outros: "Outros",
+  }[type] || "C/C";
+}
+
+function cardTypeLabel(type) {
+  return {
+    credito: "Credito",
+    debito: "Debito",
+    credito_debito: "Credito/Debito",
+  }[type] || "Credito";
+}
+
+function statusLabel(status) {
+  return status === "bloqueado" ? "Bloqueado" : "Ativo";
+}
+
+function incomeTypeLabel(type) {
+  return {
+    clt: "CLT",
+    pf: "PF",
+    informal: "Informal",
+    outros: "Outros",
+  }[type] || "Outros";
+}
+
+function categoryTypeLabel(type) {
+  return {
+    entrada: "Entrada",
+    saida: "Saida",
+    ambos: "Ambos",
+  }[type] || "Ambos";
 }
 
 function bindEvents() {
@@ -283,14 +484,30 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.view = button.dataset.view;
+      state.editing = {};
       render();
     });
   });
 
   document.getElementById("logout")?.addEventListener("click", logout);
+  document.querySelector("[data-action='cancel-edit']")?.addEventListener("click", () => {
+    state.editing = {};
+    render();
+  });
+  document.querySelectorAll("[data-action='edit']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editing = { [button.dataset.kind]: button.dataset.id };
+      render();
+    });
+  });
+  document.querySelectorAll("[data-action='delete']").forEach((button) => {
+    button.addEventListener("click", () => deleteItem(button.dataset.kind, button.dataset.id));
+  });
   document.getElementById("account-form")?.addEventListener("submit", addAccount);
   document.getElementById("card-form")?.addEventListener("submit", addCard);
   document.getElementById("income-form")?.addEventListener("submit", addIncome);
+  document.getElementById("category-form")?.addEventListener("submit", addCategory);
+  document.getElementById("brand-form")?.addEventListener("submit", addBrand);
   document.getElementById("transaction-form")?.addEventListener("submit", addTransaction);
 }
 
@@ -318,30 +535,86 @@ async function handleGoogleDemo() {
 
 async function addAccount(event) {
   event.preventDefault();
-  await state.repository.addBankAccount(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateBankAccount(values.id, values);
+  } else {
+    await state.repository.addBankAccount(values);
+  }
+  state.editing = {};
   await refreshData();
 }
 
 async function addCard(event) {
   event.preventDefault();
-  await state.repository.addCreditCard(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateCreditCard(values.id, values);
+  } else {
+    await state.repository.addCreditCard(values);
+  }
+  state.editing = {};
   await refreshData();
 }
 
 async function addIncome(event) {
   event.preventDefault();
-  await state.repository.addIncome(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateIncome(values.id, values);
+  } else {
+    await state.repository.addIncome(values);
+  }
+  state.editing = {};
   await refreshData();
 }
 
 async function addTransaction(event) {
   event.preventDefault();
-  await state.repository.addTransaction(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateTransaction(values.id, values);
+  } else {
+    await state.repository.addTransaction(values);
+  }
+  state.editing = {};
+  await refreshData();
+}
+
+async function addCategory(event) {
+  event.preventDefault();
+  await state.repository.addCategory(formValues(event.currentTarget));
+  await refreshData();
+}
+
+async function addBrand(event) {
+  event.preventDefault();
+  await state.repository.addBrand(formValues(event.currentTarget));
+  await refreshData();
+}
+
+async function deleteItem(kind, id) {
+  if (!id) return;
+  const actions = {
+    accounts: () => state.repository.deleteBankAccount(id),
+    cards: () => state.repository.deleteCreditCard(id),
+    incomes: () => state.repository.deleteIncome(id),
+    transactions: () => state.repository.deleteTransaction(id),
+    categories: () => state.repository.deleteCategory(id),
+    brands: () => state.repository.deleteBrand(id),
+  };
+
+  await actions[kind]?.();
+  state.editing = {};
   await refreshData();
 }
 
 function formValues(form) {
-  return Object.fromEntries(new FormData(form).entries());
+  const values = Object.fromEntries(new FormData(form).entries());
+  form.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+    values[checkbox.name] = checkbox.checked ? "1" : "";
+  });
+  return values;
 }
 
 function formatDate(date) {
@@ -355,4 +628,8 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
 }

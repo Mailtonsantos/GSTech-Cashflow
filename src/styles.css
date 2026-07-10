@@ -19,7 +19,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -181,7 +182,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid #cddbd6;
   border-radius: 8px;
@@ -192,12 +194,18 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: #0f766e;
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
 }
 
+textarea {
+  resize: vertical;
+}
+
 .primary-button,
+.ghost-button,
 .google-button,
 .logout,
 .sidebar nav button {
@@ -213,6 +221,12 @@ select:focus {
 .primary-button {
   color: #ffffff;
   background: #0f766e;
+  font-weight: 800;
+}
+
+.ghost-button {
+  color: #0f766e;
+  background: #e7f3f1;
   font-weight: 800;
 }
 
@@ -389,6 +403,28 @@ select:focus {
   gap: 10px;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.checkbox-row {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}
+
 .table-row,
 .item-card {
   display: flex;
@@ -410,6 +446,31 @@ select:focus {
 .table-row strong,
 .item-card strong {
   overflow-wrap: anywhere;
+}
+
+.item-card small {
+  color: #66736f;
+  line-height: 1.45;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.card-actions button {
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f766e;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.card-actions button[data-action="delete"] {
+  color: #b42318;
 }
 
 .positive { color: #0f766e; }
@@ -464,7 +525,7 @@ select:focus {
   }
 
   .sidebar nav {
-    grid-template-columns: repeat(5, minmax(58px, 1fr));
+    grid-template-columns: repeat(6, minmax(58px, 1fr));
     overflow-x: auto;
   }
 
@@ -509,5 +570,13 @@ select:focus {
 
   .item-value {
     text-align: left;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions {
+    justify-content: flex-start;
   }
 }
