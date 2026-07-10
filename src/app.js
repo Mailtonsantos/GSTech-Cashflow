@@ -424,10 +424,7 @@ function itemCard(kind, id, title, meta, value, detail, note = "") {
       <div class="item-value">
         <b>${escapeHtml(value)}</b>
         <span>${escapeHtml(detail)}</span>
-        <div class="card-actions">
-          <button type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}">Editar</button>
-          <button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button>
-        </div>
+        ${actionButtons(kind, id)}
       </div>
     </article>
   `;
@@ -439,12 +436,22 @@ function catalogCard(kind, id, title, meta, note = "", isCustom = false) {
       <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>
       <div class="item-value">
         <b>${isCustom ? "Personalizado" : "Padrao"}</b>
-        <div class="card-actions">
-          <button type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}">Editar</button>
-          <button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button>
-        </div>
+        ${actionButtons(kind, id)}
       </div>
     </article>
+  `;
+}
+
+function actionButtons(kind, id) {
+  return `
+    <div class="card-actions" aria-label="Acoes do cadastro">
+      <button class="icon-action" type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="Editar" aria-label="Editar">
+        <span aria-hidden="true">✎</span>
+      </button>
+      <button class="icon-action danger" type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="Excluir" aria-label="Excluir">
+        <span aria-hidden="true">🗑</span>
+      </button>
+    </div>
   `;
 }
 
