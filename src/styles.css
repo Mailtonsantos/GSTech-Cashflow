@@ -461,7 +461,7 @@ textarea {
   line-height: 1.45;
 }
 
-.card-actions {
+.item-card .card-actions {
   display: inline-flex;
   flex-direction: row;
   justify-content: flex-end;
@@ -471,7 +471,7 @@ textarea {
   white-space: nowrap;
 }
 
-.card-actions button {
+.item-card .card-actions button {
   width: 34px;
   height: 34px;
   border: 1px solid #d8e2de;
@@ -485,12 +485,12 @@ textarea {
   padding: 0;
 }
 
-.card-actions button.danger,
-.card-actions button[data-action="delete"] {
+.item-card .card-actions button.danger,
+.item-card .card-actions button[data-action="delete"] {
   color: #b42318;
 }
 
-.card-actions button:hover {
+.item-card .card-actions button:hover {
   background: #f3f8f6;
   border-color: #b8cec7;
 }
