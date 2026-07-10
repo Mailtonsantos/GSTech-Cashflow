@@ -1,0 +1,12 @@
+{
+  "name": "gstech-inforcred",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "node --check src/app.js && node --check server.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

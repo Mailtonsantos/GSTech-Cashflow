@@ -1,0 +1,10 @@
+{
+  "name": "Inforcred",
+  "short_name": "Inforcred",
+  "description": "Controle financeiro pessoal simples e responsivo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#0f766e",
+  "icons": []
+}
