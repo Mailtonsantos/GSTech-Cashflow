@@ -39,6 +39,8 @@ export type CartaoCreditoInput = {
   userId: string;
   nome: string;
   bandeira?: string;
+  numeroMascarado?: string | null;
+  validade?: string | null;
   limiteTotal: number;
   diaFechamento: number;
   diaVencimento: number;
@@ -75,6 +77,8 @@ export type CartaoCredito = {
   userId: string;
   nome: string;
   bandeira?: string;
+  numeroMascarado?: string | null;
+  validade?: string | null;
   limiteTotal: number;
   diaFechamento: number;
   diaVencimento: number;
@@ -98,4 +102,45 @@ export type ContaBancaria = {
   saldoAtual: number;
   limite: number;
   ativa: boolean;
+};
+
+export type ImportedCreditCard = {
+  id: string;
+  nome: string;
+  tipo: string;
+  numero?: string | null;
+  diaVencimento?: number | null;
+  validade?: string | null;
+  limiteTotal: number;
+};
+
+export type ImportedCreditCardMovement = {
+  id: string;
+  cardId: string;
+  dataMovimento: string;
+  descricao: string;
+  categoria?: string;
+  valor: number;
+  tipo: TipoMovimentacao;
+  formaPagamento?: string;
+  parcelaAtual?: number;
+  totalParcelas?: number;
+  idAgrupadorParcela?: string | null;
+  observacao?: string | null;
+};
+
+export type CreditCardImportPayload = {
+  source: {
+    name: string;
+    importedAt: string;
+  };
+  cards: ImportedCreditCard[];
+  movements: ImportedCreditCardMovement[];
+  skippedRows?: Array<Record<string, unknown>>;
+};
+
+export type CreditCardImportResult = {
+  cardsImported: number;
+  movementsImported: number;
+  movementsSkipped: number;
 };

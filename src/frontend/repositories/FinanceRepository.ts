@@ -7,7 +7,11 @@ import type {
   ContaBancaria,
   CartaoCredito,
   CartaoCreditoInput,
+  CreditCardImportPayload,
+  CreditCardImportResult,
   FaturaAtual,
+  ImportedCreditCard,
+  ImportedCreditCardMovement,
   Movimentacao,
   MovimentacaoInput,
   ResumoMensal,
@@ -49,6 +53,8 @@ type CartaoCreditoRecord = {
   user_id: string;
   nome: string;
   bandeira?: string;
+  numero_mascarado?: string | null;
+  validade?: string | null;
   limite_total: number;
   dia_fechamento: number;
   dia_vencimento: number;
@@ -133,6 +139,8 @@ function toCartao(record: CartaoCreditoRecord): CartaoCredito {
     userId: record.user_id,
     nome: record.nome,
     bandeira: record.bandeira,
+    numeroMascarado: record.numero_mascarado,
+    validade: record.validade,
     limiteTotal: record.limite_total,
     diaFechamento: record.dia_fechamento,
     diaVencimento: record.dia_vencimento,
@@ -198,6 +206,14 @@ function invoicePeriodFor(dateValue: string, card?: CartaoCreditoRecord) {
 
 function currentDateValue() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function dueDayFromImport(card: ImportedCreditCard) {
+  return card.diaVencimento && card.diaVencimento >= 1 && card.diaVencimento <= 31 ? card.diaVencimento : 10;
+}
+
+function closingDayFromDueDay(dueDay: number) {
+  return Math.max(1, dueDay - 7);
 }
 
 function nextDueDate(cards: CartaoCreditoRecord[], invoices: FaturaRecord[]) {
@@ -356,6 +372,8 @@ export class FinanceRepository implements IFinanceRepository {
       user_id: cartao.userId,
       nome: cartao.nome,
       bandeira: cartao.bandeira,
+      numero_mascarado: cartao.numeroMascarado,
+      validade: cartao.validade,
       limite_total: cartao.limiteTotal,
       dia_fechamento: cartao.diaFechamento,
       dia_vencimento: cartao.diaVencimento,
@@ -377,6 +395,57 @@ export class FinanceRepository implements IFinanceRepository {
   async listarCartoes(userId: string): Promise<CartaoCredito[]> {
     const cards = await this.getAllByUser<CartaoCreditoRecord>("cartoes_credito", userId);
     return cards.filter((card) => card.ativo).map(toCartao);
+  }
+
+  async importarDadosCartaoCredito(
+    userId: string,
+    payload: CreditCardImportPayload,
+  ): Promise<CreditCardImportResult> {
+    const existingCards = await this.getAllByUser<CartaoCreditoRecord>("cartoes_credito", userId);
+    const existingMovements = await this.getAllByUser<MovimentacaoRecord>("movimentacoes", userId);
+    const existingCardIds = new Set(existingCards.map((card) => card.id));
+    const existingMovementIds = new Set(existingMovements.map((movement) => movement.id));
+    const cardRecords = payload.cards.map((card) => this.importedCardToRecord(userId, card));
+    let cardsImported = 0;
+    let movementsImported = 0;
+    let movementsSkipped = 0;
+    const invoiceIdsToRecalculate = new Set<string>();
+
+    for (const card of cardRecords) {
+      if (!existingCardIds.has(card.id)) {
+        cardsImported += 1;
+      }
+
+      await this.put("cartoes_credito", card);
+    }
+
+    for (const movement of payload.movements) {
+      if (existingMovementIds.has(movement.id)) {
+        movementsSkipped += 1;
+        continue;
+      }
+
+      const card = cardRecords.find((item) => item.id === movement.cardId);
+      if (!card) {
+        movementsSkipped += 1;
+        continue;
+      }
+
+      const invoice = await this.findOrCreateInvoice(userId, card.id, movement.dataMovimento, card);
+      await this.put("movimentacoes", this.importedMovementToRecord(userId, movement, invoice.id));
+      invoiceIdsToRecalculate.add(invoice.id);
+      movementsImported += 1;
+    }
+
+    for (const invoiceId of invoiceIdsToRecalculate) {
+      await this.recalculateInvoiceTotal(invoiceId);
+    }
+
+    return {
+      cardsImported,
+      movementsImported,
+      movementsSkipped,
+    };
   }
 
   async ensureInitialUserData(user: UserProfile): Promise<void> {
@@ -493,6 +562,55 @@ export class FinanceRepository implements IFinanceRepository {
 
     await this.put("faturas_cartao", invoice);
     return invoice;
+  }
+
+  private importedCardToRecord(userId: string, card: ImportedCreditCard): CartaoCreditoRecord {
+    const timestamp = now();
+    const dueDay = dueDayFromImport(card);
+
+    return {
+      id: card.id,
+      user_id: userId,
+      nome: card.nome,
+      bandeira: card.tipo,
+      numero_mascarado: card.numero,
+      validade: card.validade,
+      limite_total: card.limiteTotal,
+      dia_fechamento: closingDayFromDueDay(dueDay),
+      dia_vencimento: dueDay,
+      conta_pagamento_id: null,
+      ativo: 1,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
+  }
+
+  private importedMovementToRecord(
+    userId: string,
+    movement: ImportedCreditCardMovement,
+    invoiceId: string,
+  ): MovimentacaoRecord {
+    const timestamp = now();
+
+    return {
+      id: movement.id,
+      user_id: userId,
+      conta_id: null,
+      cartao_id: movement.cardId,
+      fatura_id: invoiceId,
+      tipo: movement.tipo,
+      descricao: movement.descricao,
+      categoria: movement.categoria,
+      valor: movement.valor,
+      data_movimento: movement.dataMovimento,
+      forma_pagamento: movement.formaPagamento,
+      parcela_atual: movement.parcelaAtual ?? 1,
+      total_parcelas: movement.totalParcelas ?? 1,
+      id_agrupador_parcela: movement.idAgrupadorParcela,
+      observacao: movement.observacao ?? undefined,
+      criado_em: timestamp,
+      atualizado_em: timestamp,
+    };
   }
 
   private async recalculateInvoiceTotal(faturaId: string): Promise<void> {

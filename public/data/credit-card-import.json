@@ -1,0 +1,303 @@
+{
+  "source": {
+    "name": "Cartão de Credito.xlsx",
+    "importedAt": "2026-07-10T12:28:32"
+  },
+  "cards": [
+    {
+      "id": "xlsx-card-bv",
+      "nome": "BV",
+      "tipo": "Credito",
+      "numero": "...3780 - ...2806",
+      "diaVencimento": 17,
+      "validade": null,
+      "limiteTotal": 9850.0
+    },
+    {
+      "id": "xlsx-card-nubank",
+      "nome": "NUBANK",
+      "tipo": "Credito",
+      "numero": "...0972 - ...3966 - ...1104",
+      "diaVencimento": 6,
+      "validade": "12/28",
+      "limiteTotal": 14250.0
+    },
+    {
+      "id": "xlsx-card-nubank-pj",
+      "nome": "NUBANK PJ",
+      "tipo": "credito - Debto",
+      "numero": null,
+      "diaVencimento": null,
+      "validade": null,
+      "limiteTotal": 2900.0
+    },
+    {
+      "id": "xlsx-card-neon",
+      "nome": "NEON",
+      "tipo": "Credito",
+      "numero": null,
+      "diaVencimento": 10,
+      "validade": null,
+      "limiteTotal": 2000.0
+    },
+    {
+      "id": "xlsx-card-itau",
+      "nome": "ITAÚ",
+      "tipo": "Hiper",
+      "numero": "3729.0",
+      "diaVencimento": 23,
+      "validade": null,
+      "limiteTotal": 5550.0
+    },
+    {
+      "id": "xlsx-card-fortbrail",
+      "nome": "FORTBRAIL",
+      "tipo": "Credito",
+      "numero": "...2202",
+      "diaVencimento": 9,
+      "validade": null,
+      "limiteTotal": 5000.0
+    },
+    {
+      "id": "xlsx-card-mercado-pago",
+      "nome": "MERCADO PAGO",
+      "tipo": "Credito",
+      "numero": "...1958",
+      "diaVencimento": 17,
+      "validade": "03/31",
+      "limiteTotal": 2500.0
+    },
+    {
+      "id": "xlsx-card-arq",
+      "nome": "ARQ",
+      "tipo": "Credito",
+      "numero": null,
+      "diaVencimento": null,
+      "validade": null,
+      "limiteTotal": 0
+    },
+    {
+      "id": "xlsx-card-c6-bank",
+      "nome": "C6 BANK",
+      "tipo": "Credito - Debto",
+      "numero": "...7285",
+      "diaVencimento": 10,
+      "validade": "07/35",
+      "limiteTotal": 4300.0
+    },
+    {
+      "id": "xlsx-card-nomand",
+      "nome": "NOMAND",
+      "tipo": "Credito",
+      "numero": null,
+      "diaVencimento": null,
+      "validade": null,
+      "limiteTotal": 0
+    }
+  ],
+  "movements": [
+    {
+      "id": "xlsx-mov-5-10-xlsx-card-c6-bank",
+      "cardId": "xlsx-card-c6-bank",
+      "dataMovimento": "2026-07-08",
+      "descricao": "Importado C6 BANK linha 5",
+      "categoria": "Cartao de credito",
+      "valor": 33.0,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-6-10-xlsx-card-c6-bank",
+      "cardId": "xlsx-card-c6-bank",
+      "dataMovimento": "2026-07-09",
+      "descricao": "Importado C6 BANK linha 6",
+      "categoria": "Cartao de credito",
+      "valor": 84.42,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-7-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-30",
+      "descricao": "Importado BV linha 7",
+      "categoria": "Cartao de credito",
+      "valor": 49.99,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-8-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-26",
+      "descricao": "Importado BV linha 8",
+      "categoria": "Cartao de credito",
+      "valor": 297.73,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-9-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-26",
+      "descricao": "Importado BV linha 9",
+      "categoria": "Cartao de credito",
+      "valor": 101.61,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 3,
+      "idAgrupadorParcela": "xlsx-parcela-9-2",
+      "observacao": "=304.83/3"
+    },
+    {
+      "id": "xlsx-mov-10-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-14",
+      "descricao": "Importado BV linha 10",
+      "categoria": "Cartao de credito",
+      "valor": 11.7,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-11-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-14",
+      "descricao": "Importado BV linha 11",
+      "categoria": "Cartao de credito",
+      "valor": 9.36,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-12-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-14",
+      "descricao": "Importado BV linha 12",
+      "categoria": "Cartao de credito",
+      "valor": 112.0,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-13-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-12",
+      "descricao": "Importado BV linha 13",
+      "categoria": "Cartao de credito",
+      "valor": 214.32,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-14-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-04",
+      "descricao": "Importado BV linha 14",
+      "categoria": "Cartao de credito",
+      "valor": 36.99,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 4,
+      "idAgrupadorParcela": "xlsx-parcela-14-2",
+      "observacao": "=147.98/4"
+    },
+    {
+      "id": "xlsx-mov-15-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-04",
+      "descricao": "Importado BV linha 15",
+      "categoria": "Cartao de credito",
+      "valor": 53.59,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    },
+    {
+      "id": "xlsx-mov-16-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-06-02",
+      "descricao": "Importado BV linha 16",
+      "categoria": "Cartao de credito",
+      "valor": 53.38,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 4,
+      "idAgrupadorParcela": "xlsx-parcela-16-2",
+      "observacao": "=213.54/4"
+    },
+    {
+      "id": "xlsx-mov-18-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-05-19",
+      "descricao": "Importado BV linha 18",
+      "categoria": "Cartao de credito",
+      "valor": 250.0,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 2,
+      "idAgrupadorParcela": "xlsx-parcela-18-2",
+      "observacao": "=500/2"
+    },
+    {
+      "id": "xlsx-mov-19-2-xlsx-card-bv",
+      "cardId": "xlsx-card-bv",
+      "dataMovimento": "2026-04-30",
+      "descricao": "Importado BV linha 19",
+      "categoria": "Cartao de credito",
+      "valor": 49.99,
+      "tipo": "saida",
+      "formaPagamento": "cartao",
+      "parcelaAtual": 1,
+      "totalParcelas": 1,
+      "idAgrupadorParcela": null,
+      "observacao": null
+    }
+  ],
+  "skippedRows": [
+    {
+      "row": 17,
+      "reason": "data invalida",
+      "value": "31.05"
+    }
+  ]
+}

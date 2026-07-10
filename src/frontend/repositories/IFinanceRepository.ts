@@ -2,6 +2,8 @@ import type {
   CartaoCredito,
   CartaoCreditoInput,
   ContaBancaria,
+  CreditCardImportPayload,
+  CreditCardImportResult,
   FaturaAtual,
   Movimentacao,
   MovimentacaoInput,
@@ -27,4 +29,5 @@ export interface IFinanceRepository {
   cadastrarCartao(cartao: CartaoCreditoInput): Promise<CartaoCredito>;
   listarContas(userId: string): Promise<ContaBancaria[]>;
   listarCartoes(userId: string): Promise<CartaoCredito[]>;
+  importarDadosCartaoCredito(userId: string, payload: CreditCardImportPayload): Promise<CreditCardImportResult>;
 }
