@@ -292,26 +292,37 @@ function incomesTemplate() {
 }
 
 function categoriesTemplate() {
+  const editingCategory = editingItem("categories");
+  const editingBrand = editingItem("brands");
+
   return `
     <section class="two-column">
       <form class="entry-panel" id="category-form">
-        <div class="panel-title"><h3>Nova categoria</h3></div>
-        ${input("name", "Nome", "text")}
+        <div class="panel-title"><h3>${editingCategory ? "Editar categoria" : "Nova categoria"}</h3></div>
+        ${hiddenId(editingCategory)}
+        ${input("name", "Nome", "text", editingCategory?.nome)}
         <label>Tipo
           <select name="type">
-            ${option("saida", "Saida")}
-            ${option("entrada", "Entrada")}
-            ${option("ambos", "Ambos")}
+            ${option("saida", "Saida", editingCategory?.tipo)}
+            ${option("entrada", "Entrada", editingCategory?.tipo)}
+            ${option("ambos", "Ambos", editingCategory?.tipo)}
           </select>
         </label>
-        ${textarea("note", "Observacoes")}
-        <button class="primary-button" type="submit">${icons.plus} <span>Adicionar categoria</span></button>
+        ${textarea("note", "Observacoes", editingCategory?.observacao)}
+        <div class="button-row">
+          <button class="primary-button" type="submit">${icons.plus} <span>${editingCategory ? "Salvar categoria" : "Adicionar categoria"}</span></button>
+          ${editingCategory ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+        </div>
       </form>
       <form class="entry-panel" id="brand-form">
-        <div class="panel-title"><h3>Nova bandeira</h3></div>
-        ${input("name", "Nome", "text")}
-        ${textarea("note", "Observacoes")}
-        <button class="primary-button" type="submit">${icons.plus} <span>Adicionar bandeira</span></button>
+        <div class="panel-title"><h3>${editingBrand ? "Editar bandeira" : "Nova bandeira"}</h3></div>
+        ${hiddenId(editingBrand)}
+        ${input("name", "Nome", "text", editingBrand?.nome)}
+        ${textarea("note", "Observacoes", editingBrand?.observacao)}
+        <div class="button-row">
+          <button class="primary-button" type="submit">${icons.plus} <span>${editingBrand ? "Salvar bandeira" : "Adicionar bandeira"}</span></button>
+          ${editingBrand ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+        </div>
       </form>
       <section class="list-panel">
         <div class="panel-title"><h3>Categorias cadastradas</h3></div>
@@ -422,13 +433,16 @@ function itemCard(kind, id, title, meta, value, detail, note = "") {
   `;
 }
 
-function catalogCard(kind, id, title, meta, note = "", canDelete = false) {
+function catalogCard(kind, id, title, meta, note = "", isCustom = false) {
   return `
     <article class="item-card">
       <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>
       <div class="item-value">
-        <b>${canDelete ? "Personalizado" : "Padrao"}</b>
-        ${canDelete ? `<div class="card-actions"><button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button></div>` : ""}
+        <b>${isCustom ? "Personalizado" : "Padrao"}</b>
+        <div class="card-actions">
+          <button type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}">Editar</button>
+          <button type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}">Excluir</button>
+        </div>
       </div>
     </article>
   `;
@@ -583,13 +597,25 @@ async function addTransaction(event) {
 
 async function addCategory(event) {
   event.preventDefault();
-  await state.repository.addCategory(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateCategory(values.id, values);
+  } else {
+    await state.repository.addCategory(values);
+  }
+  state.editing = {};
   await refreshData();
 }
 
 async function addBrand(event) {
   event.preventDefault();
-  await state.repository.addBrand(formValues(event.currentTarget));
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updateBrand(values.id, values);
+  } else {
+    await state.repository.addBrand(values);
+  }
+  state.editing = {};
   await refreshData();
 }
 

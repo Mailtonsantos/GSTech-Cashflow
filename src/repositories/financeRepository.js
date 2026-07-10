@@ -420,6 +420,19 @@ export class FinanceRepository {
     });
   }
 
+  async updateCategory(itemId, form) {
+    const existing = await LocalDatabaseService.get(this.db, stores.categories, itemId);
+    if (!existing) return null;
+
+    return LocalDatabaseService.put(this.db, stores.categories, {
+      ...existing,
+      nome: form.name,
+      tipo: form.type || existing.tipo || "ambos",
+      observacao: form.note || "",
+      atualizado_em: now(),
+    });
+  }
+
   async addBrand(form) {
     return LocalDatabaseService.put(this.db, stores.cardBrands, {
       ...baseRecord(this.user.id),
@@ -430,15 +443,27 @@ export class FinanceRepository {
     });
   }
 
+  async updateBrand(itemId, form) {
+    const existing = await LocalDatabaseService.get(this.db, stores.cardBrands, itemId);
+    if (!existing) return null;
+
+    return LocalDatabaseService.put(this.db, stores.cardBrands, {
+      ...existing,
+      nome: form.name,
+      observacao: form.note || "",
+      atualizado_em: now(),
+    });
+  }
+
   async deleteCategory(itemId) {
     const existing = await LocalDatabaseService.get(this.db, stores.categories, itemId);
-    if (!existing || !existing.user_id) return;
+    if (!existing) return;
     return LocalDatabaseService.put(this.db, stores.categories, { ...existing, ativa: 0, atualizado_em: now() });
   }
 
   async deleteBrand(itemId) {
     const existing = await LocalDatabaseService.get(this.db, stores.cardBrands, itemId);
-    if (!existing || !existing.user_id) return;
+    if (!existing) return;
     return LocalDatabaseService.put(this.db, stores.cardBrands, { ...existing, ativa: 0, atualizado_em: now() });
   }
 
