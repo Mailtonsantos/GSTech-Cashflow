@@ -27,5 +27,5 @@ createServer(async (request, response) => {
     response.end(content);
   }
 }).listen(port, "127.0.0.1", () => {
-  console.log(`Inforcred rodando em http://127.0.0.1:${port}`);
+  console.log(`GSTec Cashflow rodando em http://127.0.0.1:${port}`);
 });

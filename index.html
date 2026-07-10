@@ -5,12 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f766e" />
     <meta name="description" content="Controle financeiro pessoal com contas, cartoes, rendas e movimentacoes." />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./src/styles.css" />
     <title>GSTec Cashflow</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/app.js"></script>
+    <div id="root">
+      <main style="min-height: 100vh; display: grid; place-content: center; padding: 24px; font-family: Arial, sans-serif; background: #f6f8f7; color: #16211f; text-align: center;">
+        <h1 style="margin: 0 0 10px; font-size: 28px;">GSTec Cashflow</h1>
+        <p style="margin: 0; color: #66736f; max-width: 520px;">
+          Carregando o app. Se esta mensagem permanecer, abra pelo servidor local em vez de abrir o arquivo diretamente.
+        </p>
+      </main>
+    </div>
+    <script type="module" src="./src/app.js"></script>
   </body>
 </html>
