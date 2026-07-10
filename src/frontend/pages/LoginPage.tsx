@@ -12,7 +12,11 @@ export function LoginPage({ isLoading, onGoogleLogin }: LoginPageProps) {
       <section className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.05fr_440px]">
         <div className="flex items-center bg-[linear-gradient(120deg,rgba(15,118,110,0.94),rgba(21,94,117,0.84)),url('https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center px-6 py-10 text-white sm:px-10 lg:px-14">
           <div className="max-w-2xl">
-            <div className="grid size-14 place-items-center rounded-lg bg-white text-xl font-black text-cash-brand">G</div>
+            <img
+              className="size-24 rounded-lg bg-white object-contain p-2 shadow-soft"
+              src="./assets/gstech-logo.png"
+              alt="GSTec Consultoria e Informatica"
+            />
             <h1 className="mt-8 text-5xl font-black leading-none tracking-normal sm:text-6xl lg:text-7xl">
               GSTec Cashflow
             </h1>

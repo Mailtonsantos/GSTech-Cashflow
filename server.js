@@ -9,12 +9,18 @@ const types = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".png": "image/png",
   ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
-  const cleanPath = normalize(url.pathname === "/" ? "/index.html" : url.pathname).replace(/^(\.\.[/\\])+/, "");
+  const mappedPath = url.pathname.startsWith("/assets/")
+    ? `/public${url.pathname}`
+    : url.pathname === "/"
+      ? "/index.html"
+      : url.pathname;
+  const cleanPath = normalize(mappedPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(root, cleanPath);
 
   try {

@@ -85,7 +85,7 @@ function render() {
 function loadingTemplate() {
   return `
     <main class="loading-page">
-      <div class="brand-mark">G</div>
+      <img class="brand-logo-mark" src="./assets/gstech-logo.png" alt="GSTec Consultoria e Informatica" />
       <h1>GSTec Cashflow</h1>
       <p>Preparando seu banco local...</p>
     </main>
@@ -96,7 +96,7 @@ function authTemplate() {
   return `
     <main class="auth-page">
       <section class="auth-brand">
-        <div class="brand-mark">G</div>
+        <img class="brand-logo-mark" src="./assets/gstech-logo.png" alt="GSTec Consultoria e Informatica" />
         <h1>GSTec Cashflow</h1>
         <p>Controle suas contas, cartoes, renda e despesas em uma rotina simples de acompanhar.</p>
         <div class="trust-row">
@@ -133,7 +133,7 @@ function shellTemplate() {
   return `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="logo"><span class="logo-icon">G</span><strong>GSTec Cashflow</strong></div>
+        <div class="logo"><img class="logo-image" src="./assets/gstech-logo.png" alt="GSTec" /><strong>GSTec Cashflow</strong></div>
         <nav>
           ${nav.map(([label, icon]) => `<button data-view="${label}" class="${state.view === label ? "active" : ""}" title="${label}"><span class="nav-icon">${icon}</span><span>${label}</span></button>`).join("")}
         </nav>
