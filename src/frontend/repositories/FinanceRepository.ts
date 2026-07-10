@@ -141,6 +141,20 @@ function toCartao(record: CartaoCreditoRecord): CartaoCredito {
   };
 }
 
+function toConta(record: ContaBancariaRecord): ContaBancaria {
+  return {
+    id: record.id,
+    userId: record.user_id,
+    nome: record.nome,
+    banco: record.banco,
+    tipo: record.tipo,
+    saldoInicial: record.saldo_inicial,
+    saldoAtual: record.saldo_atual,
+    limite: record.limite,
+    ativa: Boolean(record.ativa),
+  };
+}
+
 function toFatura(record: FaturaRecord, card?: CartaoCreditoRecord): FaturaAtual {
   const dueDate = card
     ? `${record.ano}-${String(record.mes).padStart(2, "0")}-${String(card.dia_vencimento).padStart(2, "0")}`
@@ -180,6 +194,24 @@ function invoicePeriodFor(dateValue: string, card?: CartaoCreditoRecord) {
   }
 
   return { mes, ano };
+}
+
+function currentDateValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function nextDueDate(cards: CartaoCreditoRecord[], invoices: FaturaRecord[]) {
+  const openInvoices = invoices.filter((invoice) => !invoice.status_pago);
+  const dates = openInvoices
+    .map((invoice) => {
+      const card = cards.find((item) => item.id === invoice.cartao_id);
+      if (!card) return null;
+      return `${invoice.ano}-${String(invoice.mes).padStart(2, "0")}-${String(card.dia_vencimento).padStart(2, "0")}`;
+    })
+    .filter((date): date is string => Boolean(date))
+    .sort((a, b) => a.localeCompare(b));
+
+  return dates[0];
 }
 
 export class FinanceRepository implements IFinanceRepository {
@@ -230,8 +262,10 @@ export class FinanceRepository implements IFinanceRepository {
 
   async buscarResumoMensal(params: BuscarResumoMensalParams): Promise<ResumoMensal> {
     this.getWebDatabase();
-    const [accounts, transactions] = await Promise.all([
+    const [accounts, cards, invoices, transactions] = await Promise.all([
       this.getAllByUser<ContaBancariaRecord>("contas_bancarias", params.userId),
+      this.getAllByUser<CartaoCreditoRecord>("cartoes_credito", params.userId),
+      this.getAllByUser<FaturaRecord>("faturas_cartao", params.userId),
       this.getAllByUser<MovimentacaoRecord>("movimentacoes", params.userId),
     ]);
 
@@ -253,11 +287,37 @@ export class FinanceRepository implements IFinanceRepository {
       { totalEntradas: 0, totalSaidas: 0 },
     );
 
-    const movementBalance = transactions.reduce((saldo, item) => {
-      return item.tipo === "entrada" ? saldo + item.valor : saldo - item.valor;
-    }, 0);
+    const accountTransactions = transactions.filter((item) => !item.cartao_id);
+    const movementBalance = accountTransactions.reduce(
+      (saldo, item) => (item.tipo === "entrada" ? saldo + item.valor : saldo - item.valor),
+      0,
+    );
 
     const initialAccountsBalance = accounts.reduce((saldo, account) => saldo + account.saldo_inicial, 0);
+    const currentOpenInvoices = await Promise.all(
+      cards
+        .filter((card) => card.ativo)
+        .map(async (card) => {
+          const period = invoicePeriodFor(currentDateValue(), card);
+          const invoice =
+            invoices.find(
+              (item) => item.cartao_id === card.id && item.mes === period.mes && item.ano === period.ano,
+            ) ?? null;
+
+          return { card, invoice };
+        }),
+    );
+
+    const currentInvoiceTotal = currentOpenInvoices.reduce((total, item) => {
+      return total + (item.invoice?.status_pago ? 0 : (item.invoice?.valor_total ?? 0));
+    }, 0);
+    const creditLimitTotal = cards
+      .filter((card) => card.ativo)
+      .reduce((total, card) => total + card.limite_total, 0);
+    const creditLimitAvailable = Math.max(creditLimitTotal - currentInvoiceTotal, 0);
+    const openInvoiceTotal = invoices
+      .filter((invoice) => !invoice.status_pago)
+      .reduce((total, invoice) => total + invoice.valor_total, 0);
 
     return {
       userId: params.userId,
@@ -267,6 +327,10 @@ export class FinanceRepository implements IFinanceRepository {
       totalEntradas: totals.totalEntradas,
       totalSaidas: totals.totalSaidas,
       balancoMes: totals.totalEntradas - totals.totalSaidas,
+      totalFaturasAbertas: openInvoiceTotal,
+      limiteCreditoTotal: creditLimitTotal,
+      limiteCreditoDisponivel: creditLimitAvailable,
+      proximoVencimentoFatura: nextDueDate(cards, invoices),
     };
   }
 
@@ -305,10 +369,19 @@ export class FinanceRepository implements IFinanceRepository {
     return toCartao(record);
   }
 
+  async listarContas(userId: string): Promise<ContaBancaria[]> {
+    const accounts = await this.getAllByUser<ContaBancariaRecord>("contas_bancarias", userId);
+    return accounts.filter((account) => account.ativa).map(toConta);
+  }
+
+  async listarCartoes(userId: string): Promise<CartaoCredito[]> {
+    const cards = await this.getAllByUser<CartaoCreditoRecord>("cartoes_credito", userId);
+    return cards.filter((card) => card.ativo).map(toCartao);
+  }
+
   async ensureInitialUserData(user: UserProfile): Promise<void> {
     this.getWebDatabase();
     const existingUser = await this.getById<UsuarioRecord>("usuarios", user.id);
-    if (existingUser) return;
 
     const timestamp = now();
 
@@ -322,7 +395,11 @@ export class FinanceRepository implements IFinanceRepository {
       atualizado_em: timestamp,
     };
 
-    const defaultAccounts: ContaBancariaRecord[] = [
+    const existingAccounts = await this.getAllByUser<ContaBancariaRecord>("contas_bancarias", user.id);
+    const accountsToCreate: ContaBancariaRecord[] = [];
+
+    if (!existingAccounts.some((account) => account.nome === "Carteira")) {
+      accountsToCreate.push(
       {
         id: createId(),
         user_id: user.id,
@@ -336,6 +413,11 @@ export class FinanceRepository implements IFinanceRepository {
         criado_em: timestamp,
         atualizado_em: timestamp,
       },
+      );
+    }
+
+    if (!existingAccounts.some((account) => account.nome === "Conta Corrente")) {
+      accountsToCreate.push(
       {
         id: createId(),
         user_id: user.id,
@@ -349,11 +431,36 @@ export class FinanceRepository implements IFinanceRepository {
         criado_em: timestamp,
         atualizado_em: timestamp,
       },
-    ];
+      );
+    }
 
-    const transaction = this.getWebDatabase().transaction(["usuarios", "contas_bancarias"], "readwrite");
-    transaction.objectStore("usuarios").put(userRecord);
-    defaultAccounts.forEach((account) => transaction.objectStore("contas_bancarias").put(account));
+    const existingCards = await this.getAllByUser<CartaoCreditoRecord>("cartoes_credito", user.id);
+    const mainAccount = existingAccounts.find((account) => account.nome === "Conta Corrente") ?? accountsToCreate.find((account) => account.nome === "Conta Corrente");
+    const defaultCard: CartaoCreditoRecord | null = existingCards.some((card) => card.nome === "Cartao Principal")
+      ? null
+      : {
+          id: createId(),
+          user_id: user.id,
+          nome: "Cartao Principal",
+          bandeira: "Visa",
+          limite_total: 1500,
+          dia_fechamento: 8,
+          dia_vencimento: 15,
+          conta_pagamento_id: mainAccount?.id ?? null,
+          ativo: 1,
+          criado_em: timestamp,
+          atualizado_em: timestamp,
+        };
+
+    if (existingUser && accountsToCreate.length === 0 && !defaultCard) return;
+    const transaction = this.getWebDatabase().transaction(["usuarios", "contas_bancarias", "cartoes_credito"], "readwrite");
+    if (!existingUser) {
+      transaction.objectStore("usuarios").put(userRecord);
+    }
+    accountsToCreate.forEach((account) => transaction.objectStore("contas_bancarias").put(account));
+    if (defaultCard) {
+      transaction.objectStore("cartoes_credito").put(defaultCard);
+    }
     await transactionDone(transaction);
   }
 

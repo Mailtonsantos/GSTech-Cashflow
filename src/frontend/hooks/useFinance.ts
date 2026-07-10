@@ -68,6 +68,16 @@ export function useFinance({ userId, repository }: UseFinanceOptions) {
     [execute],
   );
 
+  const listarContas = useCallback(
+    () => execute((financeRepository) => financeRepository.listarContas(userId)),
+    [execute, userId],
+  );
+
+  const listarCartoes = useCallback(
+    () => execute((financeRepository) => financeRepository.listarCartoes(userId)),
+    [execute, userId],
+  );
+
   return {
     loading,
     error,
@@ -75,5 +85,7 @@ export function useFinance({ userId, repository }: UseFinanceOptions) {
     buscarResumoMensal,
     buscarFaturaAtual,
     cadastrarCartao,
+    listarContas,
+    listarCartoes,
   };
 }

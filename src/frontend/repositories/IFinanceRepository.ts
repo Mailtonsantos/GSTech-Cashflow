@@ -1,6 +1,7 @@
 import type {
   CartaoCredito,
   CartaoCreditoInput,
+  ContaBancaria,
   FaturaAtual,
   Movimentacao,
   MovimentacaoInput,
@@ -24,4 +25,6 @@ export interface IFinanceRepository {
   buscarResumoMensal(params: BuscarResumoMensalParams): Promise<ResumoMensal>;
   buscarFaturaAtual(params: BuscarFaturaAtualParams): Promise<FaturaAtual | null>;
   cadastrarCartao(cartao: CartaoCreditoInput): Promise<CartaoCredito>;
+  listarContas(userId: string): Promise<ContaBancaria[]>;
+  listarCartoes(userId: string): Promise<CartaoCredito[]>;
 }

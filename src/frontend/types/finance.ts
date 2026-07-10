@@ -9,6 +9,7 @@ export type UserProfile = {
 export type FinanceSummary = {
   accountBalance: number;
   cardInvoiceTotal: number;
+  creditLimitAvailable: number;
   monthlyIncome: number;
   monthlyExpense: number;
   monthBalance: number;
@@ -52,6 +53,10 @@ export type ResumoMensal = {
   totalEntradas: number;
   totalSaidas: number;
   balancoMes: number;
+  totalFaturasAbertas: number;
+  limiteCreditoTotal: number;
+  limiteCreditoDisponivel: number;
+  proximoVencimentoFatura?: string;
 };
 
 export type FaturaAtual = {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { CalendarClock, CreditCard, TrendingUp, Wallet } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { CalendarClock, CreditCard, Plus, TrendingUp, Wallet } from "lucide-react";
 import { MetricCard } from "../components/dashboard/MetricCard";
 import { AppShell } from "../components/layout/AppShell";
 import { useFinance } from "../hooks/useFinance";
 import { useFinanceSummary } from "../hooks/useFinanceSummary";
-import type { ResumoMensal } from "../types/finance";
+import type { CartaoCredito, ContaBancaria, ResumoMensal, TipoMovimentacao } from "../types/finance";
 
 const money = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
@@ -18,8 +18,11 @@ type DashboardPageProps = {
 
 export function DashboardPage({ userId }: DashboardPageProps) {
   const fallbackSummary = useFinanceSummary();
-  const { loading, error, buscarResumoMensal } = useFinance({ userId });
+  const { loading, error, salvarMovimentacao, buscarResumoMensal, listarContas, listarCartoes } = useFinance({ userId });
   const [monthlySummary, setMonthlySummary] = useState<ResumoMensal | null>(null);
+  const [accounts, setAccounts] = useState<ContaBancaria[]>([]);
+  const [cards, setCards] = useState<CartaoCredito[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const referenceDate = new Date();
   const mes = referenceDate.getMonth() + 1;
   const ano = referenceDate.getFullYear();
@@ -27,24 +30,53 @@ export function DashboardPage({ userId }: DashboardPageProps) {
   useEffect(() => {
     let isMounted = true;
 
-    buscarResumoMensal({ userId, mes, ano }).then((summary) => {
-      if (isMounted && summary) {
-        setMonthlySummary(summary);
-      }
-    });
+    Promise.all([buscarResumoMensal({ userId, mes, ano }), listarContas(), listarCartoes()]).then(
+      ([summary, nextAccounts, nextCards]) => {
+        if (!isMounted) return;
+        if (summary) setMonthlySummary(summary);
+        if (nextAccounts) setAccounts(nextAccounts);
+        if (nextCards) setCards(nextCards);
+      },
+    );
 
     return () => {
       isMounted = false;
     };
-  }, [ano, buscarResumoMensal, mes, userId]);
+  }, [ano, buscarResumoMensal, listarCartoes, listarContas, mes, refreshKey, userId]);
 
   const summary = {
     ...fallbackSummary,
     accountBalance: monthlySummary?.saldoContas ?? fallbackSummary.accountBalance,
-    monthlyIncome: monthlySummary?.totalEntradas ?? fallbackSummary.monthlyIncome,
-    monthlyExpense: monthlySummary?.totalSaidas ?? fallbackSummary.monthlyExpense,
-    monthBalance: monthlySummary?.balancoMes ?? fallbackSummary.monthBalance,
+    cardInvoiceTotal: monthlySummary?.totalFaturasAbertas ?? fallbackSummary.cardInvoiceTotal,
+    creditLimitAvailable: monthlySummary?.limiteCreditoDisponivel ?? fallbackSummary.creditLimitAvailable,
+    monthlyIncome: monthlySummary?.totalEntradas ?? 0,
+    monthlyExpense: monthlySummary?.totalSaidas ?? 0,
+    monthBalance: monthlySummary?.balancoMes ?? 0,
+    nextInvoiceDueDate: monthlySummary?.proximoVencimentoFatura
+      ? new Date(`${monthlySummary.proximoVencimentoFatura}T00:00:00`).toLocaleDateString("pt-BR")
+      : fallbackSummary.nextInvoiceDueDate,
   };
+
+  async function handleSaveTransaction(form: NewTransactionFormValues) {
+    const targetAccount = form.paymentTarget === "conta" ? accounts[0] : null;
+    const targetCard = form.paymentTarget === "cartao" ? cards[0] : null;
+
+    await salvarMovimentacao({
+      userId,
+      contaId: targetAccount?.id ?? null,
+      cartaoId: targetCard?.id ?? null,
+      tipo: form.type,
+      descricao: form.description,
+      categoria: form.category,
+      valor: form.amount,
+      dataMovimento: form.date,
+      formaPagamento: form.paymentTarget,
+      parcelaAtual: 1,
+      totalParcelas: 1,
+    });
+
+    setRefreshKey((current) => current + 1);
+  }
 
   return (
     <AppShell title="Visao principal">
@@ -67,9 +99,9 @@ export function DashboardPage({ userId }: DashboardPageProps) {
           tone="teal"
         />
         <MetricCard
-          title="Fatura do cartao"
-          value={money(summary.cardInvoiceTotal)}
-          description="Total calculado pelas movimentacoes vinculadas a faturas abertas."
+          title="Limite disponivel"
+          value={money(summary.creditLimitAvailable)}
+          description={`Limite total menos fatura atual: ${money(summary.cardInvoiceTotal)} em aberto.`}
           icon={<CreditCard size={22} />}
           tone="blue"
         />
@@ -99,7 +131,15 @@ export function DashboardPage({ userId }: DashboardPageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-cash-line bg-white p-5 shadow-sm">
+        <NewTransactionForm
+          cards={cards}
+          isSaving={loading}
+          onSubmit={handleSaveTransaction}
+        />
+      </section>
+
+      <section className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+        <div className="rounded-lg border border-cash-line bg-white p-5 shadow-sm lg:col-start-2">
           <h2 className="text-lg font-black text-cash-ink">Proxima fatura</h2>
           <p className="mt-4 text-3xl font-black text-cash-ink">{money(summary.cardInvoiceTotal)}</p>
           <p className="mt-2 text-sm leading-6 text-cash-muted">
@@ -108,6 +148,147 @@ export function DashboardPage({ userId }: DashboardPageProps) {
         </div>
       </section>
     </AppShell>
+  );
+}
+
+type NewTransactionFormValues = {
+  description: string;
+  category: string;
+  amount: number;
+  date: string;
+  type: TipoMovimentacao;
+  paymentTarget: "conta" | "cartao";
+};
+
+function NewTransactionForm({
+  cards,
+  isSaving,
+  onSubmit,
+}: {
+  cards: CartaoCredito[];
+  isSaving: boolean;
+  onSubmit: (values: NewTransactionFormValues) => Promise<void>;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState<NewTransactionFormValues>({
+    description: "",
+    category: "",
+    amount: 0,
+    date: today,
+    type: "saida",
+    paymentTarget: "conta",
+  });
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.description.trim() || form.amount <= 0) return;
+
+    await onSubmit(form);
+    setForm({
+      description: "",
+      category: "",
+      amount: 0,
+      date: today,
+      type: "saida",
+      paymentTarget: "conta",
+    });
+  }
+
+  return (
+    <form className="rounded-lg border border-cash-line bg-white p-5 shadow-sm" onSubmit={handleSubmit}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black text-cash-ink">Novo lancamento</h2>
+        <div className="grid size-10 place-items-center rounded-lg bg-teal-50 text-cash-brand">
+          <Plus size={20} />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          Descricao
+          <input
+            className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+            value={form.description}
+            onChange={(event) => setForm({ ...form, description: event.target.value })}
+            placeholder="Ex: Mercado, salario, internet"
+            required
+          />
+        </label>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+            Tipo
+            <select
+              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              value={form.type}
+              onChange={(event) => setForm({ ...form, type: event.target.value as TipoMovimentacao })}
+            >
+              <option value="saida">Saida</option>
+              <option value="entrada">Entrada</option>
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+            Destino
+            <select
+              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              value={form.paymentTarget}
+              onChange={(event) => setForm({ ...form, paymentTarget: event.target.value as "conta" | "cartao" })}
+            >
+              <option value="conta">Conta</option>
+              <option value="cartao" disabled={cards.length === 0 || form.type === "entrada"}>
+                Cartao {cards.length === 0 ? "(cadastre um cartao)" : ""}
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+            Valor
+            <input
+              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              min="0.01"
+              step="0.01"
+              type="number"
+              value={form.amount || ""}
+              onChange={(event) => setForm({ ...form, amount: Number(event.target.value) })}
+              required
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+            Data
+            <input
+              className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+              type="date"
+              value={form.date}
+              onChange={(event) => setForm({ ...form, date: event.target.value })}
+              required
+            />
+          </label>
+        </div>
+
+        <label className="grid gap-1.5 text-sm font-bold text-cash-muted">
+          Categoria
+          <input
+            className="rounded-lg border border-cash-line px-3 py-2 text-cash-ink outline-none focus:border-cash-brand focus:ring-4 focus:ring-teal-700/10"
+            value={form.category}
+            onChange={(event) => setForm({ ...form, category: event.target.value })}
+            placeholder="Ex: Alimentacao, renda, transporte"
+          />
+        </label>
+
+        <button
+          className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cash-brand px-4 py-2 text-sm font-black text-white transition hover:bg-cash-brandDark disabled:opacity-60"
+          disabled={isSaving}
+          type="submit"
+        >
+          <Plus size={18} />
+          {isSaving ? "Salvando..." : "Salvar lancamento"}
+        </button>
+      </div>
+    </form>
   );
 }
 
