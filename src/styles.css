@@ -27,6 +27,26 @@ button {
   cursor: pointer;
 }
 
+.loading-page {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  text-align: center;
+  background: #f6f8f7;
+}
+
+.loading-page h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.loading-page p {
+  margin: 0;
+  color: #66736f;
+  font-weight: 700;
+}
+
 .auth-page {
   min-height: 100vh;
   display: grid;

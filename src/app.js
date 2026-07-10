@@ -1,94 +1,107 @@
-const sessionKey = "inforcred:session";
+import { FinanceRepository } from "./repositories/financeRepository.js";
+import { AuthService } from "./services/authService.js";
+import { LocalDatabaseService } from "./services/localDatabase.js";
+
 const today = new Date().toISOString().slice(0, 10);
 const root = document.getElementById("root");
 
 const icons = {
-  dashboard: "▦",
-  account: "⌂",
-  card: "▣",
+  dashboard: "D",
+  account: "B",
+  card: "C",
   income: "$",
-  movement: "↕",
-  logout: "⇥",
-  user: "◉",
+  movement: "M",
+  logout: "S",
+  user: "U",
   plus: "+",
 };
 
 const money = (value) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 
-const id = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-
-const userStoreKey = (email) => `inforcred:data:${email.toLowerCase()}`;
-
-const defaultData = (name) => ({
-  accounts: [{ id: id(), name: "Conta principal", bank: "Banco pessoal", balance: 1850, limit: 500 }],
-  cards: [{ id: id(), name: "Cartao do dia a dia", brand: "Visa", closingDay: 8, dueDay: 15, limit: 2500, used: 620 }],
-  incomes: [{ id: id(), source: `Salario de ${(name || "usuario").split(" ")[0]}`, amount: 3200, day: 5 }],
-  transactions: [
-    { id: id(), description: "Mercado", type: "saida", amount: 286.5, category: "Alimentacao", date: today },
-    { id: id(), description: "Recebimento mensal", type: "entrada", amount: 3200, category: "Renda", date: today },
-  ],
-});
-
 const state = {
-  user: readSession(),
+  user: AuthService.getSession(),
+  repository: null,
   data: null,
   view: "Resumo",
+  loading: true,
 };
 
-if (state.user) {
-  state.data = readData(state.user);
-}
+bootstrap();
 
-function readSession() {
-  const raw = localStorage.getItem(sessionKey);
-  return raw ? JSON.parse(raw) : null;
-}
+async function bootstrap() {
+  if (state.user) {
+    await startUserSession(state.user, false);
+    return;
+  }
 
-function readData(user) {
-  const key = userStoreKey(user.email);
-  const raw = localStorage.getItem(key);
-  if (raw) return JSON.parse(raw);
-  const seeded = defaultData(user.name);
-  localStorage.setItem(key, JSON.stringify(seeded));
-  return seeded;
-}
-
-function saveData(nextData) {
-  state.data = nextData;
-  localStorage.setItem(userStoreKey(state.user.email), JSON.stringify(nextData));
+  state.loading = false;
   render();
 }
 
-function setUser(user) {
+async function startUserSession(user, persistSession = true) {
+  state.loading = true;
+  render();
+
+  const db = await LocalDatabaseService.openForUser(user.id);
+  state.repository = new FinanceRepository(db, user);
+  await state.repository.ensureUserStructure();
+
   state.user = user;
-  state.data = readData(user);
-  localStorage.setItem(sessionKey, JSON.stringify(user));
+  state.data = await state.repository.getSnapshot();
+  state.loading = false;
+
+  if (persistSession) {
+    AuthService.saveSession(user);
+  }
+
+  render();
+}
+
+async function refreshData() {
+  state.data = await state.repository.getSnapshot();
   render();
 }
 
 function logout() {
-  localStorage.removeItem(sessionKey);
+  AuthService.clearSession();
   state.user = null;
+  state.repository = null;
   state.data = null;
+  state.view = "Resumo";
   render();
 }
 
 function render() {
+  if (state.loading) {
+    root.innerHTML = loadingTemplate();
+    return;
+  }
+
   root.innerHTML = state.user ? shellTemplate() : authTemplate();
   bindEvents();
+}
+
+function loadingTemplate() {
+  return `
+    <main class="loading-page">
+      <div class="brand-mark">G</div>
+      <h1>GSTec Cashflow</h1>
+      <p>Preparando seu banco local...</p>
+    </main>
+  `;
 }
 
 function authTemplate() {
   return `
     <main class="auth-page">
       <section class="auth-brand">
-        <div class="brand-mark">▣</div>
-        <h1>Inforcred</h1>
+        <div class="brand-mark">G</div>
+        <h1>GSTec Cashflow</h1>
         <p>Controle suas contas, cartoes, renda e despesas em uma rotina simples de acompanhar.</p>
         <div class="trust-row">
-          <span>✓ Dados locais</span>
-          <span>✦ Pronto para evoluir</span>
+          <span>OK Dados locais por usuario</span>
+          <span>OK Pronto para Google Login</span>
         </div>
       </section>
       <section class="auth-panel" aria-label="Acesso">
@@ -120,7 +133,7 @@ function shellTemplate() {
   return `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="logo"><span class="logo-icon">▣</span><strong>Inforcred</strong></div>
+        <div class="logo"><span class="logo-icon">G</span><strong>GSTec Cashflow</strong></div>
         <nav>
           ${nav.map(([label, icon]) => `<button data-view="${label}" class="${state.view === label ? "active" : ""}" title="${label}"><span class="nav-icon">${icon}</span><span>${label}</span></button>`).join("")}
         </nav>
@@ -157,7 +170,7 @@ function summaryTemplate() {
       ${metric("Saldo em contas", money(accountBalance), icons.account, "green")}
       ${metric("Limite disponivel", money(creditAvailable), icons.card, "blue")}
       ${metric("Renda mensal", money(income), icons.income, "teal")}
-      ${metric("Saidas recentes", money(expenses), "↑", "rose")}
+      ${metric("Saidas recentes", money(expenses), "-", "rose")}
       <section class="wide-panel">
         <div class="panel-title"><h3>Ultimas movimentacoes</h3></div>
         <div class="table-list">
@@ -265,9 +278,7 @@ function bindEvents() {
   });
 
   document.getElementById("auth-form")?.addEventListener("submit", handleAuth);
-  document.getElementById("google-demo")?.addEventListener("click", () => {
-    setUser({ name: "Conta Google", email: "google.demo@inforcred.local" });
-  });
+  document.getElementById("google-demo")?.addEventListener("click", handleGoogleDemo);
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -292,48 +303,41 @@ function setAuthMode(mode) {
   nameField.hidden = mode === "login";
 }
 
-function handleAuth(event) {
+async function handleAuth(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  const email = String(form.get("email") || "").trim().toLowerCase();
-  const name = String(form.get("name") || "").trim() || email.split("@")[0] || "Usuario";
-  setUser({ name, email });
+  await startUserSession(AuthService.signInWithEmail({
+    name: form.get("name"),
+    email: form.get("email"),
+  }));
 }
 
-function addAccount(event) {
-  event.preventDefault();
-  const form = formValues(event.currentTarget);
-  saveData({
-    ...state.data,
-    accounts: [...state.data.accounts, { id: id(), name: form.name, bank: form.bank, balance: Number(form.balance), limit: Number(form.limit) }],
-  });
+async function handleGoogleDemo() {
+  await startUserSession(AuthService.signInWithGoogleDemo());
 }
 
-function addCard(event) {
+async function addAccount(event) {
   event.preventDefault();
-  const form = formValues(event.currentTarget);
-  saveData({
-    ...state.data,
-    cards: [...state.data.cards, { id: id(), name: form.name, brand: form.brand, limit: Number(form.limit), used: Number(form.used), closingDay: Number(form.closingDay), dueDay: Number(form.dueDay) }],
-  });
+  await state.repository.addBankAccount(formValues(event.currentTarget));
+  await refreshData();
 }
 
-function addIncome(event) {
+async function addCard(event) {
   event.preventDefault();
-  const form = formValues(event.currentTarget);
-  saveData({
-    ...state.data,
-    incomes: [...state.data.incomes, { id: id(), source: form.source, amount: Number(form.amount), day: Number(form.day) }],
-  });
+  await state.repository.addCreditCard(formValues(event.currentTarget));
+  await refreshData();
 }
 
-function addTransaction(event) {
+async function addIncome(event) {
   event.preventDefault();
-  const form = formValues(event.currentTarget);
-  saveData({
-    ...state.data,
-    transactions: [{ id: id(), description: form.description, type: form.type, amount: Number(form.amount), category: form.category, date: form.date }, ...state.data.transactions],
-  });
+  await state.repository.addIncome(formValues(event.currentTarget));
+  await refreshData();
+}
+
+async function addTransaction(event) {
+  event.preventDefault();
+  await state.repository.addTransaction(formValues(event.currentTarget));
+  await refreshData();
 }
 
 function formValues(form) {
@@ -352,5 +356,3 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-
-render();

@@ -1,6 +1,6 @@
 {
-  "name": "Inforcred",
-  "short_name": "Inforcred",
+  "name": "GSTec Cashflow",
+  "short_name": "Cashflow",
   "description": "Controle financeiro pessoal simples e responsivo.",
   "start_url": "/",
   "display": "standalone",
