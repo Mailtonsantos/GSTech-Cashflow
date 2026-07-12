@@ -20,6 +20,24 @@ function normalizeMoney(value) {
   return Number(value || 0);
 }
 
+function addMonths(dateValue, monthsToAdd) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const originalDay = date.getDate();
+  date.setMonth(date.getMonth() + monthsToAdd, 1);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(originalDay, lastDay));
+  return date.toISOString().slice(0, 10);
+}
+
+function splitInstallments(total, installments) {
+  const cents = Math.round(normalizeMoney(total) * 100);
+  const count = Math.max(1, Number(installments || 1));
+  const base = Math.floor(cents / count);
+  const remainder = cents - base * count;
+
+  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
+}
+
 function seedData(user) {
   return {
     bankAccounts: [
@@ -80,6 +98,10 @@ function seedData(user) {
         valor: 286.5,
         data_movimento: today(),
         forma_pagamento: "debito",
+        condicao_pagamento: "avista",
+        parcela_atual: 1,
+        total_parcelas: 1,
+        id_agrupador_parcela: null,
         observacao: "",
         excluida: 0,
       },
@@ -94,6 +116,10 @@ function seedData(user) {
         valor: 3200,
         data_movimento: today(),
         forma_pagamento: "transferencia",
+        condicao_pagamento: "avista",
+        parcela_atual: 1,
+        total_parcelas: 1,
+        id_agrupador_parcela: null,
         observacao: "",
         excluida: 0,
       },
@@ -272,6 +298,12 @@ export class FinanceRepository {
           category: item.categoria || "",
           categoryId: item.categoria_id || "",
           date: item.data_movimento,
+          cardId: item.cartao_id || "",
+          paymentTarget: item.cartao_id ? "cartao" : "conta",
+          paymentMode: item.condicao_pagamento || (Number(item.total_parcelas || 1) > 1 ? "parcelado" : "avista"),
+          currentInstallment: Number(item.parcela_atual || 1),
+          totalInstallments: Number(item.total_parcelas || 1),
+          installmentGroupId: item.id_agrupador_parcela || "",
           note: item.observacao || "",
         }))
         .sort((a, b) => b.date.localeCompare(a.date)),
@@ -468,7 +500,41 @@ export class FinanceRepository {
   }
 
   async addTransaction(form) {
-    return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord(form));
+    const totalInstallments = Math.max(1, Number(form.installments || 1));
+    const isInstallmentPurchase =
+      form.paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
+
+    if (!isInstallmentPurchase) {
+      return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord({ ...form, installments: 1, paymentMode: "avista" }));
+    }
+
+    const groupId = id();
+    const values = splitInstallments(form.amount, totalInstallments);
+
+    await Promise.all(
+      values.map((amount, index) =>
+        LocalDatabaseService.put(
+          this.db,
+          stores.transactions,
+          this.transactionRecord(
+            {
+              ...form,
+              amount,
+              date: addMonths(form.date, index),
+              paymentMode: "parcelado",
+            },
+            null,
+            {
+              currentInstallment: index + 1,
+              totalInstallments,
+              groupId,
+            },
+          ),
+        ),
+      ),
+    );
+
+    return null;
   }
 
   async updateTransaction(itemId, form) {
@@ -489,8 +555,11 @@ export class FinanceRepository {
     return LocalDatabaseService.put(this.db, stores.transactions, { ...existing, excluida: 1, atualizado_em: now() });
   }
 
-  transactionRecord(form, existing = null) {
+  transactionRecord(form, existing = null, installment = null) {
     const category = this.lastSnapshot?.categories?.find((item) => item.id === form.categoryId);
+    const totalInstallments = installment?.totalInstallments ?? Math.max(1, Number(form.installments || 1));
+    const currentInstallment = installment?.currentInstallment ?? Math.min(Number(form.currentInstallment || 1), totalInstallments);
+
     return {
       ...(existing || baseRecord(this.user.id)),
       user_id: this.user.id,
@@ -503,6 +572,10 @@ export class FinanceRepository {
       valor: normalizeMoney(form.amount),
       data_movimento: form.date,
       forma_pagamento: form.paymentTarget || (form.type === "entrada" ? "transferencia" : "debito"),
+      condicao_pagamento: form.paymentMode || (totalInstallments > 1 ? "parcelado" : "avista"),
+      parcela_atual: currentInstallment,
+      total_parcelas: totalInstallments,
+      id_agrupador_parcela: installment?.groupId || form.installmentGroupId || existing?.id_agrupador_parcela || null,
       observacao: form.note || "",
       excluida: 0,
     };

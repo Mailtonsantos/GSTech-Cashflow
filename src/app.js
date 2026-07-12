@@ -347,6 +347,13 @@ function transactionsTemplate() {
     ${input("description", "Descricao", "text", editing?.description)}
     <label>Tipo<select name="type">${option("saida", "Saida", editing?.type)}${option("entrada", "Entrada", editing?.type)}</select></label>
     ${input("amount", "Valor", "number", editing?.amount)}
+    <label>Condicao
+      <select name="paymentMode">
+        ${option("avista", "A vista", editing?.paymentMode)}
+        ${option("parcelado", "Parcelado", editing?.paymentMode)}
+      </select>
+    </label>
+    ${input("installments", "Numero de parcelas", "number", editing?.totalInstallments || 1)}
     <label>Categoria
       <select name="categoryId">
         <option value="">Selecione</option>
@@ -368,7 +375,7 @@ function transactionsTemplate() {
     ${input("date", "Data", "date", editing?.date || today)}
     ${textarea("note", "Observacoes", editing?.note)}
   `, "Historico", state.data.transactions.map((item) =>
-    itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, item.type === "entrada" ? "Entrada" : "Saida", item.note)
+    itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, transactionDetail(item), item.note)
   ).join(""), editing);
 }
 
@@ -492,6 +499,14 @@ function categoryTypeLabel(type) {
     saida: "Saida",
     ambos: "Ambos",
   }[type] || "Ambos";
+}
+
+function transactionDetail(item) {
+  if (Number(item.totalInstallments || 1) > 1) {
+    return `Parcela ${item.currentInstallment}/${item.totalInstallments}`;
+  }
+
+  return item.paymentMode === "parcelado" ? "Parcelado" : item.type === "entrada" ? "Entrada a vista" : "Saida a vista";
 }
 
 function bindEvents() {
