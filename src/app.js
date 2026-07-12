@@ -353,7 +353,7 @@ function transactionsTemplate() {
         ${option("parcelado", "Parcelado", editing?.paymentMode)}
       </select>
     </label>
-    ${input("installments", "Numero de parcelas", "number", editing?.totalInstallments || 1)}
+    ${installmentsInput(editing)}
     <label>Categoria
       <select name="categoryId">
         <option value="">Selecione</option>
@@ -401,6 +401,22 @@ function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, ed
 function input(name, label, type, value = "") {
   const step = type === "number" ? ' min="0" step="0.01"' : "";
   return `<label>${label}<input name="${name}" type="${type}" value="${escapeAttribute(value ?? "")}"${step} ${type === "text" ? "" : "required"} /></label>`;
+}
+
+function installmentsInput(editing = null) {
+  const mode = editing?.paymentMode || "avista";
+  const value = mode === "parcelado" ? Math.max(2, Number(editing?.totalInstallments || 2)) : 1;
+  const min = mode === "parcelado" ? 2 : 1;
+  const readonly = mode === "avista" ? "readonly" : "";
+
+  return `
+    <label>Numero de parcelas
+      <div class="input-suffix">
+        <input name="installments" type="number" inputmode="numeric" min="${min}" step="1" value="${value}" ${readonly} required />
+        <span>x</span>
+      </div>
+    </label>
+  `;
 }
 
 function textarea(name, label, value = "") {
@@ -544,7 +560,37 @@ function bindEvents() {
   document.getElementById("income-form")?.addEventListener("submit", addIncome);
   document.getElementById("category-form")?.addEventListener("submit", addCategory);
   document.getElementById("brand-form")?.addEventListener("submit", addBrand);
-  document.getElementById("transaction-form")?.addEventListener("submit", addTransaction);
+  const transactionForm = document.getElementById("transaction-form");
+  transactionForm?.addEventListener("submit", addTransaction);
+  bindInstallmentControls(transactionForm);
+}
+
+function bindInstallmentControls(form) {
+  if (!form) return;
+
+  const modeField = form.elements.paymentMode;
+  const installmentsField = form.elements.installments;
+  if (!modeField || !installmentsField) return;
+
+  function syncInstallments() {
+    if (modeField.value === "avista") {
+      installmentsField.value = "1";
+      installmentsField.min = "1";
+      installmentsField.readOnly = true;
+      return;
+    }
+
+    installmentsField.min = "2";
+    installmentsField.readOnly = false;
+    installmentsField.value = String(Math.max(2, parseInteger(installmentsField.value, 2)));
+  }
+
+  modeField.addEventListener("change", syncInstallments);
+  installmentsField.addEventListener("input", () => {
+    installmentsField.value = String(parseInteger(installmentsField.value, modeField.value === "parcelado" ? 2 : 1));
+  });
+  installmentsField.addEventListener("blur", syncInstallments);
+  syncInstallments();
 }
 
 function setAuthMode(mode) {
@@ -608,6 +654,7 @@ async function addIncome(event) {
 async function addTransaction(event) {
   event.preventDefault();
   const values = formValues(event.currentTarget);
+  values.installments = String(normalizeInstallments(values.paymentMode, values.installments));
   if (values.id) {
     await state.repository.updateTransaction(values.id, values);
   } else {
@@ -667,6 +714,19 @@ function formValues(form) {
 
 function formatDate(date) {
   return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+function parseInteger(value, fallback = 1) {
+  const parsed = Number.parseInt(String(value || "").replace(/\D/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeInstallments(paymentMode, value) {
+  if (paymentMode === "parcelado") {
+    return Math.max(2, parseInteger(value, 2));
+  }
+
+  return 1;
 }
 
 function escapeHtml(value) {

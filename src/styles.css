@@ -433,6 +433,24 @@ textarea {
   height: 18px;
 }
 
+.input-suffix {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.input-suffix input {
+  margin-top: 0;
+}
+
+.input-suffix span {
+  color: #52625e;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
 .table-row,
 .item-card {
   display: flex;

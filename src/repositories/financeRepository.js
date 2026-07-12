@@ -20,6 +20,19 @@ function normalizeMoney(value) {
   return Number(value || 0);
 }
 
+function parseInteger(value, fallback = 1) {
+  const parsed = Number.parseInt(String(value || "").replace(/\D/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeInstallments(paymentMode, value) {
+  if (paymentMode === "parcelado") {
+    return Math.max(2, parseInteger(value, 2));
+  }
+
+  return 1;
+}
+
 function addMonths(dateValue, monthsToAdd) {
   const date = new Date(`${dateValue}T00:00:00`);
   const originalDay = date.getDate();
@@ -31,7 +44,7 @@ function addMonths(dateValue, monthsToAdd) {
 
 function splitInstallments(total, installments) {
   const cents = Math.round(normalizeMoney(total) * 100);
-  const count = Math.max(1, Number(installments || 1));
+  const count = Math.max(1, parseInteger(installments, 1));
   const base = Math.floor(cents / count);
   const remainder = cents - base * count;
 
@@ -500,7 +513,7 @@ export class FinanceRepository {
   }
 
   async addTransaction(form) {
-    const totalInstallments = Math.max(1, Number(form.installments || 1));
+    const totalInstallments = normalizeInstallments(form.paymentMode, form.installments);
     const isInstallmentPurchase =
       form.paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
 
@@ -557,8 +570,8 @@ export class FinanceRepository {
 
   transactionRecord(form, existing = null, installment = null) {
     const category = this.lastSnapshot?.categories?.find((item) => item.id === form.categoryId);
-    const totalInstallments = installment?.totalInstallments ?? Math.max(1, Number(form.installments || 1));
-    const currentInstallment = installment?.currentInstallment ?? Math.min(Number(form.currentInstallment || 1), totalInstallments);
+    const totalInstallments = installment?.totalInstallments ?? normalizeInstallments(form.paymentMode, form.installments);
+    const currentInstallment = installment?.currentInstallment ?? Math.min(parseInteger(form.currentInstallment, 1), totalInstallments);
 
     return {
       ...(existing || baseRecord(this.user.id)),
