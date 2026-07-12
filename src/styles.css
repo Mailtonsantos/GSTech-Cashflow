@@ -451,6 +451,10 @@ textarea {
   font-weight: 800;
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 .table-row,
 .item-card {
   display: flex;

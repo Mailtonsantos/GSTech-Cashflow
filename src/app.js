@@ -342,37 +342,44 @@ function categoriesTemplate() {
 
 function transactionsTemplate() {
   const editing = editingItem("transactions");
+  const paymentTarget = editing?.paymentTarget || "conta";
+  const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "avista") : "avista";
+  const showCreditFields = paymentTarget === "cartao";
+  const showInstallments = showCreditFields && paymentMode === "parcelado";
+
   return twoColumnTemplate("transaction-form", editing ? "Editar movimentacao" : "Nova movimentacao", `
     ${hiddenId(editing)}
     ${input("description", "Descricao", "text", editing?.description)}
-    <label>Tipo<select name="type">${option("saida", "Saida", editing?.type)}${option("entrada", "Entrada", editing?.type)}</select></label>
-    ${input("amount", "Valor", "number", editing?.amount)}
-    <label>Condicao
-      <select name="paymentMode">
-        ${option("avista", "A vista", editing?.paymentMode)}
-        ${option("parcelado", "Parcelado", editing?.paymentMode)}
-      </select>
-    </label>
-    ${installmentsInput(editing)}
-    <label>Categoria
-      <select name="categoryId">
-        <option value="">Selecione</option>
-        ${state.data.categories.map((category) => option(category.id, `${category.nome} (${categoryTypeLabel(category.tipo)})`, editing?.categoryId)).join("")}
-      </select>
-    </label>
-    <label>Forma/Destino
-      <select name="paymentTarget">
-        ${option("conta", "Conta/Debito", editing?.paymentTarget)}
-        ${option("cartao", "Cartao de credito", editing?.paymentTarget)}
-      </select>
-    </label>
-    <label>Cartao
-      <select name="cardId">
-        <option value="">Sem cartao</option>
-        ${state.data.cards.map((card) => option(card.id, card.name, editing?.cardId)).join("")}
-      </select>
-    </label>
-    ${input("date", "Data", "date", editing?.date || today)}
+    <div class="form-grid">
+      <label>Tipo<select name="type">${option("saida", "Saida", editing?.type)}${option("entrada", "Entrada", editing?.type)}</select></label>
+      <label>Categoria
+        <select name="categoryId">
+          <option value="">Selecione</option>
+          ${state.data.categories.map((category) => option(category.id, `${category.nome} (${categoryTypeLabel(category.tipo)})`, editing?.categoryId)).join("")}
+        </select>
+      </label>
+      <label>Forma/Destino
+        <select name="paymentTarget">
+          ${option("conta", "Conta/Debito", paymentTarget)}
+          ${option("cartao", "Cartao de credito", paymentTarget)}
+        </select>
+      </label>
+      <label data-credit-field class="${showCreditFields ? "" : "is-hidden"}">Cartao
+        <select name="cardId">
+          <option value="">Sem cartao</option>
+          ${state.data.cards.map((card) => option(card.id, card.name, editing?.cardId)).join("")}
+        </select>
+      </label>
+      <label data-credit-field class="${showCreditFields ? "" : "is-hidden"}">Condicao
+        <select name="paymentMode">
+          ${option("avista", "A vista", paymentMode)}
+          ${option("parcelado", "Parcelado", paymentMode)}
+        </select>
+      </label>
+      ${installmentsInput(editing, showInstallments)}
+      ${input("amount", "Valor", "number", editing?.amount)}
+      ${input("date", "Data", "date", editing?.date || today)}
+    </div>
     ${textarea("note", "Observacoes", editing?.note)}
   `, "Historico", state.data.transactions.map((item) =>
     itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, transactionDetail(item), item.note)
@@ -403,14 +410,14 @@ function input(name, label, type, value = "") {
   return `<label>${label}<input name="${name}" type="${type}" value="${escapeAttribute(value ?? "")}"${step} ${type === "text" ? "" : "required"} /></label>`;
 }
 
-function installmentsInput(editing = null) {
+function installmentsInput(editing = null, visible = false) {
   const mode = editing?.paymentMode || "avista";
   const value = mode === "parcelado" ? Math.max(2, Number(editing?.totalInstallments || 2)) : 1;
   const min = mode === "parcelado" ? 2 : 1;
   const readonly = mode === "avista" ? "readonly" : "";
 
   return `
-    <label>Numero de parcelas
+    <label data-installments-field class="${visible ? "" : "is-hidden"}">Numero de parcelas
       <div class="input-suffix">
         <input name="installments" type="number" inputmode="numeric" min="${min}" step="1" value="${value}" ${readonly} required />
         <span>x</span>
@@ -568,11 +575,29 @@ function bindEvents() {
 function bindInstallmentControls(form) {
   if (!form) return;
 
+  const targetField = form.elements.paymentTarget;
   const modeField = form.elements.paymentMode;
   const installmentsField = form.elements.installments;
-  if (!modeField || !installmentsField) return;
+  const installmentsWrapper = form.querySelector("[data-installments-field]");
+  const creditWrappers = form.querySelectorAll("[data-credit-field]");
+  if (!targetField || !modeField || !installmentsField) return;
 
   function syncInstallments() {
+    const isCredit = targetField.value === "cartao";
+    const isInstallment = isCredit && modeField.value === "parcelado";
+
+    creditWrappers.forEach((wrapper) => wrapper.classList.toggle("is-hidden", !isCredit));
+    installmentsWrapper?.classList.toggle("is-hidden", !isInstallment);
+
+    if (!isCredit) {
+      modeField.value = "avista";
+      installmentsField.value = "1";
+      installmentsField.min = "1";
+      installmentsField.readOnly = true;
+      form.elements.cardId.value = "";
+      return;
+    }
+
     if (modeField.value === "avista") {
       installmentsField.value = "1";
       installmentsField.min = "1";
@@ -585,9 +610,11 @@ function bindInstallmentControls(form) {
     installmentsField.value = String(Math.max(2, parseInteger(installmentsField.value, 2)));
   }
 
+  targetField.addEventListener("change", syncInstallments);
   modeField.addEventListener("change", syncInstallments);
   installmentsField.addEventListener("input", () => {
-    installmentsField.value = String(parseInteger(installmentsField.value, modeField.value === "parcelado" ? 2 : 1));
+    const minimum = targetField.value === "cartao" && modeField.value === "parcelado" ? 2 : 1;
+    installmentsField.value = String(parseInteger(installmentsField.value, minimum));
   });
   installmentsField.addEventListener("blur", syncInstallments);
   syncInstallments();
@@ -654,7 +681,11 @@ async function addIncome(event) {
 async function addTransaction(event) {
   event.preventDefault();
   const values = formValues(event.currentTarget);
-  values.installments = String(normalizeInstallments(values.paymentMode, values.installments));
+  if (values.paymentTarget !== "cartao") {
+    values.cardId = "";
+    values.paymentMode = "avista";
+  }
+  values.installments = String(normalizeInstallments(values.paymentTarget, values.paymentMode, values.installments));
   if (values.id) {
     await state.repository.updateTransaction(values.id, values);
   } else {
@@ -721,8 +752,8 @@ function parseInteger(value, fallback = 1) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeInstallments(paymentMode, value) {
-  if (paymentMode === "parcelado") {
+function normalizeInstallments(paymentTarget, paymentMode, value) {
+  if (paymentTarget === "cartao" && paymentMode === "parcelado") {
     return Math.max(2, parseInteger(value, 2));
   }
 

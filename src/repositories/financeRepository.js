@@ -25,8 +25,8 @@ function parseInteger(value, fallback = 1) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeInstallments(paymentMode, value) {
-  if (paymentMode === "parcelado") {
+function normalizeInstallments(paymentTarget, paymentMode, value) {
+  if (paymentTarget === "cartao" && paymentMode === "parcelado") {
     return Math.max(2, parseInteger(value, 2));
   }
 
@@ -513,9 +513,10 @@ export class FinanceRepository {
   }
 
   async addTransaction(form) {
-    const totalInstallments = normalizeInstallments(form.paymentMode, form.installments);
+    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "avista";
+    const totalInstallments = normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
     const isInstallmentPurchase =
-      form.paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
+      paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
 
     if (!isInstallmentPurchase) {
       return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord({ ...form, installments: 1, paymentMode: "avista" }));
@@ -570,7 +571,8 @@ export class FinanceRepository {
 
   transactionRecord(form, existing = null, installment = null) {
     const category = this.lastSnapshot?.categories?.find((item) => item.id === form.categoryId);
-    const totalInstallments = installment?.totalInstallments ?? normalizeInstallments(form.paymentMode, form.installments);
+    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "avista";
+    const totalInstallments = installment?.totalInstallments ?? normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
     const currentInstallment = installment?.currentInstallment ?? Math.min(parseInteger(form.currentInstallment, 1), totalInstallments);
 
     return {
@@ -585,7 +587,7 @@ export class FinanceRepository {
       valor: normalizeMoney(form.amount),
       data_movimento: form.date,
       forma_pagamento: form.paymentTarget || (form.type === "entrada" ? "transferencia" : "debito"),
-      condicao_pagamento: form.paymentMode || (totalInstallments > 1 ? "parcelado" : "avista"),
+      condicao_pagamento: paymentMode || (totalInstallments > 1 ? "parcelado" : "avista"),
       parcela_atual: currentInstallment,
       total_parcelas: totalInstallments,
       id_agrupador_parcela: installment?.groupId || form.installmentGroupId || existing?.id_agrupador_parcela || null,
