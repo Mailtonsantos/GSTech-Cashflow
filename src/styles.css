@@ -565,6 +565,19 @@ textarea {
   align-items: start;
 }
 
+.transaction-layout {
+  height: calc(100vh - 132px);
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.transaction-layout .entry-panel,
+.transaction-layout .list-panel {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .entry-panel,
 .list-panel {
   padding: 16px;
@@ -589,6 +602,55 @@ textarea {
   color: #66736f;
   border: 1px dashed #cddbd6;
   border-radius: 8px;
+}
+
+.month-group {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #d8e2de;
+}
+
+.month-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.month-title,
+.month-subtotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.month-title {
+  padding: 4px 2px 0;
+}
+
+.month-title strong {
+  color: #16211f;
+  text-transform: capitalize;
+}
+
+.month-title span {
+  color: #66736f;
+  font-size: 0.82rem;
+}
+
+.month-subtotal {
+  padding: 9px 12px;
+  border: 1px solid #b6ead4;
+  border-radius: 8px;
+  background: #c9f9df;
+}
+
+.month-subtotal span {
+  color: #16211f;
+}
+
+.month-subtotal strong {
+  font-size: 1rem;
 }
 
 @media (max-width: 1060px) {
@@ -641,6 +703,7 @@ textarea {
   .settings-section {
     grid-template-columns: 1fr;
   }
+
 }
 
 @media (max-width: 620px) {
@@ -670,5 +733,16 @@ textarea {
 
   .card-actions {
     justify-content: flex-start;
+  }
+
+  .transaction-layout {
+    height: auto;
+    overflow: visible;
+  }
+
+  .transaction-layout .entry-panel,
+  .transaction-layout .list-panel {
+    max-height: none;
+    overflow-y: visible;
   }
 }

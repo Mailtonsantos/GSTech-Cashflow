@@ -387,6 +387,7 @@ function transactionsTemplate() {
   const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "") : "";
   const showCreditFields = paymentTarget === "cartao";
   const showInstallments = showCreditFields && paymentMode === "parcelado";
+  const historyContent = monthlyTransactionHistory(state.data.transactions);
 
   return twoColumnTemplate("transaction-form", editing ? "Editar movimentacao" : "Nova movimentacao", `
     ${hiddenId(editing)}
@@ -423,14 +424,12 @@ function transactionsTemplate() {
       ${input("date", "Data", "date", editing?.date || today)}
     </div>
     ${textarea("note", "Observacoes", editing?.note)}
-  `, "Historico", state.data.transactions.map((item) =>
-    itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, transactionDetail(item), item.note)
-  ).join(""), editing);
+  `, "Historico", historyContent, editing, "transaction-layout");
 }
 
-function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null) {
+function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null, layoutClass = "") {
   return `
-    <section class="two-column">
+    <section class="two-column ${layoutClass}">
       <form class="entry-panel" id="${formId}">
         <div class="panel-title"><h3>${formTitle}</h3></div>
         ${fields}
@@ -445,6 +444,49 @@ function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, ed
       </section>
     </section>
   `;
+}
+
+function monthlyTransactionHistory(transactions) {
+  if (!transactions.length) {
+    return "";
+  }
+
+  return groupTransactionsByMonth(transactions)
+    .map(({ key, items }) => {
+      const subtotal = items.reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0);
+      return `
+        <section class="month-group" aria-label="${escapeAttribute(monthLabel(key))}">
+          <div class="month-title">
+            <strong>${escapeHtml(monthLabel(key))}</strong>
+            <span>${items.length} ${items.length === 1 ? "lancamento" : "lancamentos"}</span>
+          </div>
+          ${items.map((item) =>
+            itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, transactionDetail(item), item.note)
+          ).join("")}
+          <div class="month-subtotal">
+            <span>Sub. Total:</span>
+            <strong>${money(subtotal)}</strong>
+          </div>
+        </section>
+      `;
+    })
+    .join("");
+}
+
+function groupTransactionsByMonth(transactions) {
+  const groups = new Map();
+
+  transactions.forEach((item) => {
+    const key = monthKey(item.date);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(item);
+  });
+
+  return [...groups.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, items]) => ({ key, items }));
 }
 
 function input(name, label, type, value = "") {
@@ -837,6 +879,20 @@ function formValues(form) {
 
 function formatDate(date) {
   return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+function monthKey(date) {
+  return String(date || "").slice(0, 7) || "0000-00";
+}
+
+function monthLabel(key) {
+  if (!/^\d{4}-\d{2}$/.test(key)) {
+    return "Sem data";
+  }
+
+  const [year, month] = key.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
 function parseInteger(value, fallback = 1) {
