@@ -11,6 +11,7 @@ const icons = {
   card: "C",
   income: "$",
   movement: "M",
+  settings: "&#9881;",
   logout: "S",
   user: "U",
   plus: "+",
@@ -24,6 +25,7 @@ const state = {
   repository: null,
   data: null,
   view: "Resumo",
+  settingsTab: "categories",
   loading: true,
   editing: {},
 };
@@ -127,26 +129,28 @@ function authTemplate() {
 
 function shellTemplate() {
   const nav = [
-    ["Resumo", icons.dashboard],
-    ["Contas", icons.account],
-    ["Cartoes", icons.card],
-    ["Rendas", icons.income],
-    ["Categorias", icons.movement],
-    ["Movimentos", icons.movement],
+    ["Resumo", "Resumo", icons.dashboard],
+    ["Contas", "Contas", icons.account],
+    ["Cartoes", "Cartoes", icons.card],
+    ["Rendas", "Rendas", icons.income],
+    ["Configuracoes", "Configura&ccedil;&otilde;es", icons.settings],
+    ["Movimentos", "Movimentos", icons.movement],
   ];
+  const eyebrow = state.view === "Configuracoes" ? "Configura&ccedil;&otilde;es do controle financeiro" : "Controle financeiro";
+  const pageTitle = state.view === "Configuracoes" ? "Configura&ccedil;&otilde;es" : state.view;
 
   return `
     <div class="app-shell">
       <aside class="sidebar">
         <div class="logo"><img class="logo-image" src="./assets/gstech-logo.png" alt="GSTec" /><strong>GSTec Cashflow</strong></div>
         <nav>
-          ${nav.map(([label, icon]) => `<button data-view="${label}" class="${state.view === label ? "active" : ""}" title="${label}"><span class="nav-icon">${icon}</span><span>${label}</span></button>`).join("")}
+          ${nav.map(([view, label, icon]) => `<button data-view="${view}" class="${state.view === view ? "active" : ""}" title="${label}"><span class="nav-icon">${icon}</span><span>${label}</span></button>`).join("")}
         </nav>
         <button class="logout" id="logout">${icons.logout} <span>Sair</span></button>
       </aside>
       <main class="workspace">
         <header class="topbar">
-          <div><span class="eyebrow">Controle financeiro</span><h2>${state.view}</h2></div>
+          <div><span class="eyebrow">${eyebrow}</span><h2>${pageTitle}</h2></div>
           <div class="user-chip">${icons.user} <span>${escapeHtml(state.user.name)}</span></div>
         </header>
         ${viewTemplate()}
@@ -159,7 +163,7 @@ function viewTemplate() {
   if (state.view === "Contas") return accountsTemplate();
   if (state.view === "Cartoes") return cardsTemplate();
   if (state.view === "Rendas") return incomesTemplate();
-  if (state.view === "Categorias") return categoriesTemplate();
+  if (state.view === "Configuracoes") return categoriesTemplate();
   if (state.view === "Movimentos") return transactionsTemplate();
   return summaryTemplate();
 }
@@ -295,12 +299,22 @@ function categoriesTemplate() {
   const editingCategory = editingItem("categories");
   const editingBrand = editingItem("brands");
   const editingPaymentMethod = editingItem("paymentMethods");
+  const activeTab = state.settingsTab;
+  const tabs = [
+    ["categories", "Categorias"],
+    ["brands", "Bandeiras"],
+    ["paymentMethods", "Forma de pagamento"],
+  ];
 
   return `
-    <section class="two-column">
-      <form class="entry-panel" id="category-form">
-        <div class="panel-title"><h3>${editingCategory ? "Editar categoria" : "Nova categoria"}</h3></div>
-        ${hiddenId(editingCategory)}
+    <section class="settings-page">
+      <div class="settings-tabs" role="tablist" aria-label="Configuracoes do controle financeiro">
+        ${tabs.map(([id, label]) => `<button type="button" data-settings-tab="${id}" class="${activeTab === id ? "active" : ""}" aria-selected="${activeTab === id ? "true" : "false"}">${label}</button>`).join("")}
+      </div>
+      ${activeTab === "categories" ? settingsSectionTemplate(
+        "category-form",
+        editingCategory ? "Editar categoria" : "Nova categoria",
+        `${hiddenId(editingCategory)}
         ${input("name", "Nome", "text", editingCategory?.nome)}
         <label>Tipo
           <select name="type">
@@ -309,25 +323,27 @@ function categoriesTemplate() {
             ${option("ambos", "Ambos", editingCategory?.tipo)}
           </select>
         </label>
-        ${textarea("note", "Observacoes", editingCategory?.observacao)}
-        <div class="button-row">
-          <button class="primary-button" type="submit">${icons.plus} <span>${editingCategory ? "Salvar categoria" : "Adicionar categoria"}</span></button>
-          ${editingCategory ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
-        </div>
-      </form>
-      <form class="entry-panel" id="brand-form">
-        <div class="panel-title"><h3>${editingBrand ? "Editar bandeira" : "Nova bandeira"}</h3></div>
-        ${hiddenId(editingBrand)}
+        ${textarea("note", "Observacoes", editingCategory?.observacao)}`,
+        editingCategory ? "Salvar categoria" : "Adicionar categoria",
+        Boolean(editingCategory),
+        "Categorias cadastradas",
+        state.data.categories.map((item) => catalogCard("categories", item.id, item.nome, categoryTypeLabel(item.tipo), item.observacao, Boolean(item.user_id))).join(""),
+      ) : ""}
+      ${activeTab === "brands" ? settingsSectionTemplate(
+        "brand-form",
+        editingBrand ? "Editar bandeira" : "Nova bandeira",
+        `${hiddenId(editingBrand)}
         ${input("name", "Nome", "text", editingBrand?.nome)}
-        ${textarea("note", "Observacoes", editingBrand?.observacao)}
-        <div class="button-row">
-          <button class="primary-button" type="submit">${icons.plus} <span>${editingBrand ? "Salvar bandeira" : "Adicionar bandeira"}</span></button>
-          ${editingBrand ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
-        </div>
-      </form>
-      <form class="entry-panel" id="payment-method-form">
-        <div class="panel-title"><h3>${editingPaymentMethod ? "Editar forma de pagamento" : "Nova forma de pagamento"}</h3></div>
-        ${hiddenId(editingPaymentMethod)}
+        ${textarea("note", "Observacoes", editingBrand?.observacao)}`,
+        editingBrand ? "Salvar bandeira" : "Adicionar bandeira",
+        Boolean(editingBrand),
+        "Bandeiras cadastradas",
+        state.data.brands.map((item) => catalogCard("brands", item.id, item.nome, item.user_id ? "Personalizada" : "Padrao do sistema", item.observacao, Boolean(item.user_id))).join(""),
+      ) : ""}
+      ${activeTab === "paymentMethods" ? settingsSectionTemplate(
+        "payment-method-form",
+        editingPaymentMethod ? "Editar forma de pagamento" : "Nova forma de pagamento",
+        `${hiddenId(editingPaymentMethod)}
         ${input("name", "Nome", "text", editingPaymentMethod?.nome)}
         <label>Comportamento
           <select name="behavior">
@@ -335,29 +351,30 @@ function categoriesTemplate() {
             ${option("cartao", "Cartao de credito", editingPaymentMethod?.comportamento)}
           </select>
         </label>
-        ${textarea("note", "Observacoes", editingPaymentMethod?.observacao)}
+        ${textarea("note", "Observacoes", editingPaymentMethod?.observacao)}`,
+        editingPaymentMethod ? "Salvar forma" : "Adicionar forma",
+        Boolean(editingPaymentMethod),
+        "Formas de pagamento",
+        state.data.paymentMethods.map((item) => catalogCard("paymentMethods", item.id, item.nome, paymentBehaviorLabel(item.comportamento), item.observacao, Boolean(item.user_id))).join(""),
+      ) : ""}
+    </section>
+  `;
+}
+
+function settingsSectionTemplate(formId, formTitle, fields, buttonLabel, editing, listTitle, listContent) {
+  return `
+    <section class="settings-section">
+      <form class="entry-panel" id="${formId}">
+        <div class="panel-title"><h3>${formTitle}</h3></div>
+        ${fields}
         <div class="button-row">
-          <button class="primary-button" type="submit">${icons.plus} <span>${editingPaymentMethod ? "Salvar forma" : "Adicionar forma"}</span></button>
-          ${editingPaymentMethod ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+          <button class="primary-button" type="submit">${icons.plus} <span>${buttonLabel}</span></button>
+          ${editing ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
         </div>
       </form>
       <section class="list-panel">
-        <div class="panel-title"><h3>Categorias cadastradas</h3></div>
-        <div class="card-list">
-          ${state.data.categories.map((item) => catalogCard("categories", item.id, item.nome, categoryTypeLabel(item.tipo), item.observacao, Boolean(item.user_id))).join("")}
-        </div>
-      </section>
-      <section class="list-panel">
-        <div class="panel-title"><h3>Bandeiras cadastradas</h3></div>
-        <div class="card-list">
-          ${state.data.brands.map((item) => catalogCard("brands", item.id, item.nome, item.user_id ? "Personalizada" : "Padrao do sistema", item.observacao, Boolean(item.user_id))).join("")}
-        </div>
-      </section>
-      <section class="list-panel">
-        <div class="panel-title"><h3>Formas de pagamento</h3></div>
-        <div class="card-list">
-          ${state.data.paymentMethods.map((item) => catalogCard("paymentMethods", item.id, item.nome, paymentBehaviorLabel(item.comportamento), item.observacao, Boolean(item.user_id))).join("")}
-        </div>
+        <div class="panel-title"><h3>${listTitle}</h3></div>
+        <div class="card-list">${listContent || `<p class="empty-state">Nenhum item cadastrado ainda.</p>`}</div>
       </section>
     </section>
   `;
@@ -583,6 +600,14 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.view = button.dataset.view;
+      state.editing = {};
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.settingsTab = button.dataset.settingsTab;
       state.editing = {};
       render();
     });

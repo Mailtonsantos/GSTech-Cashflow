@@ -520,6 +520,44 @@ textarea {
 .positive { color: #0f766e; }
 .negative { color: #c24135; }
 
+.settings-page {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid #d8e2de;
+}
+
+.settings-tabs button {
+  min-height: 36px;
+  border: 1px solid #d8e2de;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #f8fbfa;
+  color: #52625e;
+  font-weight: 800;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
+.settings-tabs button.active {
+  background: #ffffff;
+  color: #0f766e;
+  box-shadow: 0 -1px 0 #ffffff inset;
+}
+
+.settings-section {
+  display: grid;
+  grid-template-columns: minmax(300px, 448px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .two-column {
   display: grid;
   grid-template-columns: minmax(300px, 448px) minmax(0, 1fr);
@@ -599,7 +637,8 @@ textarea {
     padding: 16px;
   }
 
-  .two-column {
+  .two-column,
+  .settings-section {
     grid-template-columns: 1fr;
   }
 }
