@@ -294,6 +294,7 @@ function incomesTemplate() {
 function categoriesTemplate() {
   const editingCategory = editingItem("categories");
   const editingBrand = editingItem("brands");
+  const editingPaymentMethod = editingItem("paymentMethods");
 
   return `
     <section class="two-column">
@@ -324,6 +325,22 @@ function categoriesTemplate() {
           ${editingBrand ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
         </div>
       </form>
+      <form class="entry-panel" id="payment-method-form">
+        <div class="panel-title"><h3>${editingPaymentMethod ? "Editar forma de pagamento" : "Nova forma de pagamento"}</h3></div>
+        ${hiddenId(editingPaymentMethod)}
+        ${input("name", "Nome", "text", editingPaymentMethod?.nome)}
+        <label>Comportamento
+          <select name="behavior">
+            ${option("conta", "Conta/Debito", editingPaymentMethod?.comportamento)}
+            ${option("cartao", "Cartao de credito", editingPaymentMethod?.comportamento)}
+          </select>
+        </label>
+        ${textarea("note", "Observacoes", editingPaymentMethod?.observacao)}
+        <div class="button-row">
+          <button class="primary-button" type="submit">${icons.plus} <span>${editingPaymentMethod ? "Salvar forma" : "Adicionar forma"}</span></button>
+          ${editingPaymentMethod ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+        </div>
+      </form>
       <section class="list-panel">
         <div class="panel-title"><h3>Categorias cadastradas</h3></div>
         <div class="card-list">
@@ -336,13 +353,20 @@ function categoriesTemplate() {
           ${state.data.brands.map((item) => catalogCard("brands", item.id, item.nome, item.user_id ? "Personalizada" : "Padrao do sistema", item.observacao, Boolean(item.user_id))).join("")}
         </div>
       </section>
+      <section class="list-panel">
+        <div class="panel-title"><h3>Formas de pagamento</h3></div>
+        <div class="card-list">
+          ${state.data.paymentMethods.map((item) => catalogCard("paymentMethods", item.id, item.nome, paymentBehaviorLabel(item.comportamento), item.observacao, Boolean(item.user_id))).join("")}
+        </div>
+      </section>
     </section>
   `;
 }
 
 function transactionsTemplate() {
   const editing = editingItem("transactions");
-  const paymentTarget = editing?.paymentTarget || "conta";
+  const selectedPaymentMethodId = editing?.paymentMethodId || defaultPaymentMethodId("conta");
+  const paymentTarget = paymentMethodBehavior(selectedPaymentMethodId);
   const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "avista") : "avista";
   const showCreditFields = paymentTarget === "cartao";
   const showInstallments = showCreditFields && paymentMode === "parcelado";
@@ -358,10 +382,9 @@ function transactionsTemplate() {
           ${state.data.categories.map((category) => option(category.id, `${category.nome} (${categoryTypeLabel(category.tipo)})`, editing?.categoryId)).join("")}
         </select>
       </label>
-      <label>Forma/Destino
-        <select name="paymentTarget">
-          ${option("conta", "Conta/Debito", paymentTarget)}
-          ${option("cartao", "Cartao de credito", paymentTarget)}
+      <label>Forma de pagamento
+        <select name="paymentMethodId">
+          ${state.data.paymentMethods.map((method) => option(method.id, method.nome, selectedPaymentMethodId)).join("")}
         </select>
       </label>
       <label data-credit-field class="${showCreditFields ? "" : "is-hidden"}">Cartao
@@ -524,6 +547,23 @@ function categoryTypeLabel(type) {
   }[type] || "Ambos";
 }
 
+function paymentBehaviorLabel(behavior) {
+  return behavior === "cartao" ? "Cartao de credito" : "Conta/Debito";
+}
+
+function defaultPaymentMethodId(behavior) {
+  const method = state.data.paymentMethods.find((item) => item.comportamento === behavior);
+  return method?.id || (behavior === "cartao" ? "default-payment-cartao" : "default-payment-conta");
+}
+
+function paymentMethodById(id) {
+  return state.data.paymentMethods.find((item) => item.id === id) || state.data.paymentMethods[0] || null;
+}
+
+function paymentMethodBehavior(id) {
+  return paymentMethodById(id)?.comportamento || "conta";
+}
+
 function transactionDetail(item) {
   if (Number(item.totalInstallments || 1) > 1) {
     return `Parcela ${item.currentInstallment}/${item.totalInstallments}`;
@@ -567,6 +607,7 @@ function bindEvents() {
   document.getElementById("income-form")?.addEventListener("submit", addIncome);
   document.getElementById("category-form")?.addEventListener("submit", addCategory);
   document.getElementById("brand-form")?.addEventListener("submit", addBrand);
+  document.getElementById("payment-method-form")?.addEventListener("submit", addPaymentMethod);
   const transactionForm = document.getElementById("transaction-form");
   transactionForm?.addEventListener("submit", addTransaction);
   bindInstallmentControls(transactionForm);
@@ -575,15 +616,15 @@ function bindEvents() {
 function bindInstallmentControls(form) {
   if (!form) return;
 
-  const targetField = form.elements.paymentTarget;
+  const paymentMethodField = form.elements.paymentMethodId;
   const modeField = form.elements.paymentMode;
   const installmentsField = form.elements.installments;
   const installmentsWrapper = form.querySelector("[data-installments-field]");
   const creditWrappers = form.querySelectorAll("[data-credit-field]");
-  if (!targetField || !modeField || !installmentsField) return;
+  if (!paymentMethodField || !modeField || !installmentsField) return;
 
   function syncInstallments() {
-    const isCredit = targetField.value === "cartao";
+    const isCredit = paymentMethodBehavior(paymentMethodField.value) === "cartao";
     const isInstallment = isCredit && modeField.value === "parcelado";
 
     creditWrappers.forEach((wrapper) => wrapper.classList.toggle("is-hidden", !isCredit));
@@ -610,10 +651,10 @@ function bindInstallmentControls(form) {
     installmentsField.value = String(Math.max(2, parseInteger(installmentsField.value, 2)));
   }
 
-  targetField.addEventListener("change", syncInstallments);
+  paymentMethodField.addEventListener("change", syncInstallments);
   modeField.addEventListener("change", syncInstallments);
   installmentsField.addEventListener("input", () => {
-    const minimum = targetField.value === "cartao" && modeField.value === "parcelado" ? 2 : 1;
+    const minimum = paymentMethodBehavior(paymentMethodField.value) === "cartao" && modeField.value === "parcelado" ? 2 : 1;
     installmentsField.value = String(parseInteger(installmentsField.value, minimum));
   });
   installmentsField.addEventListener("blur", syncInstallments);
@@ -681,6 +722,9 @@ async function addIncome(event) {
 async function addTransaction(event) {
   event.preventDefault();
   const values = formValues(event.currentTarget);
+  const paymentMethod = paymentMethodById(values.paymentMethodId);
+  values.paymentTarget = paymentMethod?.comportamento || "conta";
+  values.paymentMethodName = paymentMethod?.nome || "";
   if (values.paymentTarget !== "cartao") {
     values.cardId = "";
     values.paymentMode = "avista";
@@ -719,6 +763,18 @@ async function addBrand(event) {
   await refreshData();
 }
 
+async function addPaymentMethod(event) {
+  event.preventDefault();
+  const values = formValues(event.currentTarget);
+  if (values.id) {
+    await state.repository.updatePaymentMethod(values.id, values);
+  } else {
+    await state.repository.addPaymentMethod(values);
+  }
+  state.editing = {};
+  await refreshData();
+}
+
 async function deleteItem(kind, id) {
   if (!id) return;
   const actions = {
@@ -728,6 +784,7 @@ async function deleteItem(kind, id) {
     transactions: () => state.repository.deleteTransaction(id),
     categories: () => state.repository.deleteCategory(id),
     brands: () => state.repository.deleteBrand(id),
+    paymentMethods: () => state.repository.deletePaymentMethod(id),
   };
 
   await actions[kind]?.();

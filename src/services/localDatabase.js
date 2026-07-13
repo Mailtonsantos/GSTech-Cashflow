@@ -1,10 +1,11 @@
-const databaseVersion = 2;
+const databaseVersion = 3;
 
 const stores = {
   users: "usuarios",
   userDetails: "usuarios_dados_complementares",
   cardBrands: "bandeiras_cartao",
   categories: "categorias_movimentacao",
+  paymentMethods: "formas_pagamento",
   bankAccounts: "contas_bancarias",
   creditCards: "cartoes_credito",
   incomes: "rendas",
@@ -15,6 +16,7 @@ const userScopedStores = [
   stores.userDetails,
   stores.cardBrands,
   stores.categories,
+  stores.paymentMethods,
   stores.bankAccounts,
   stores.creditCards,
   stores.incomes,

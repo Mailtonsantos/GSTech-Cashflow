@@ -141,6 +141,14 @@ function seedData(user) {
 }
 
 const defaultBrands = ["Visa", "Mastercard", "Elo", "Hipercard", "American Express", "Nubank", "Mercado Pago"];
+const defaultPaymentMethods = [
+  ["default-payment-conta", "Conta/Debito", "conta"],
+  ["default-payment-cartao", "Cartao de credito", "cartao"],
+  ["default-payment-pix", "Pix", "conta"],
+  ["default-payment-dinheiro", "Dinheiro", "conta"],
+  ["default-payment-boleto", "Boleto", "conta"],
+  ["default-payment-transferencia", "Transferencia", "conta"],
+];
 const defaultCategories = [
   ["Alimentacao", "saida"],
   ["Transporte", "saida"],
@@ -199,9 +207,10 @@ export class FinanceRepository {
   }
 
   async ensureCatalogs() {
-    const [brands, categories] = await Promise.all([
+    const [brands, categories, paymentMethods] = await Promise.all([
       LocalDatabaseService.getAll(this.db, stores.cardBrands),
       LocalDatabaseService.getAll(this.db, stores.categories),
+      LocalDatabaseService.getAll(this.db, stores.paymentMethods),
     ]);
 
     const brandCreates = defaultBrands
@@ -234,17 +243,32 @@ export class FinanceRepository {
         }),
       );
 
-    await Promise.all([...brandCreates, ...categoryCreates]);
+    const paymentMethodCreates = defaultPaymentMethods
+      .filter(([, name]) => !paymentMethods.some((item) => !item.user_id && item.nome.toLowerCase() === name.toLowerCase()))
+      .map(([methodId, name, behavior]) =>
+        LocalDatabaseService.put(this.db, stores.paymentMethods, {
+          ...baseRecord(this.user.id),
+          id: methodId,
+          user_id: null,
+          nome: name,
+          comportamento: behavior,
+          ativa: 1,
+          observacao: "",
+        }),
+      );
+
+    await Promise.all([...brandCreates, ...categoryCreates, ...paymentMethodCreates]);
   }
 
   async getSnapshot() {
-    const [accounts, cards, incomes, transactions, brands, categories, userDetails] = await Promise.all([
+    const [accounts, cards, incomes, transactions, brands, categories, paymentMethods, userDetails] = await Promise.all([
       LocalDatabaseService.getAllByUser(this.db, stores.bankAccounts, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.creditCards, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.incomes, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
       LocalDatabaseService.getAll(this.db, stores.cardBrands),
       LocalDatabaseService.getAll(this.db, stores.categories),
+      LocalDatabaseService.getAll(this.db, stores.paymentMethods),
       LocalDatabaseService.getAllByUser(this.db, stores.userDetails, this.user.id),
     ]);
 
@@ -254,6 +278,7 @@ export class FinanceRepository {
       userDetails: userDetails[0] || null,
       brands: brands.filter((item) => item.ativa && (!item.user_id || item.user_id === this.user.id)),
       categories: categories.filter((item) => item.ativa && (!item.user_id || item.user_id === this.user.id)),
+      paymentMethods: paymentMethods.filter((item) => item.ativa && (!item.user_id || item.user_id === this.user.id)),
       accounts: accounts
         .filter((item) => item.ativa)
         .map((item) => ({
@@ -312,6 +337,8 @@ export class FinanceRepository {
           categoryId: item.categoria_id || "",
           date: item.data_movimento,
           cardId: item.cartao_id || "",
+          paymentMethodId: item.forma_pagamento_id || (item.cartao_id ? "default-payment-cartao" : "default-payment-conta"),
+          paymentMethodName: item.forma_pagamento || "",
           paymentTarget: item.cartao_id ? "cartao" : "conta",
           paymentMode: item.condicao_pagamento || (Number(item.total_parcelas || 1) > 1 ? "parcelado" : "avista"),
           currentInstallment: Number(item.parcela_atual || 1),
@@ -512,6 +539,36 @@ export class FinanceRepository {
     return LocalDatabaseService.put(this.db, stores.cardBrands, { ...existing, ativa: 0, atualizado_em: now() });
   }
 
+  async addPaymentMethod(form) {
+    return LocalDatabaseService.put(this.db, stores.paymentMethods, {
+      ...baseRecord(this.user.id),
+      user_id: this.user.id,
+      nome: form.name,
+      comportamento: form.behavior || "conta",
+      ativa: 1,
+      observacao: form.note || "",
+    });
+  }
+
+  async updatePaymentMethod(itemId, form) {
+    const existing = await LocalDatabaseService.get(this.db, stores.paymentMethods, itemId);
+    if (!existing) return null;
+
+    return LocalDatabaseService.put(this.db, stores.paymentMethods, {
+      ...existing,
+      nome: form.name,
+      comportamento: form.behavior || existing.comportamento || "conta",
+      observacao: form.note || "",
+      atualizado_em: now(),
+    });
+  }
+
+  async deletePaymentMethod(itemId) {
+    const existing = await LocalDatabaseService.get(this.db, stores.paymentMethods, itemId);
+    if (!existing) return;
+    return LocalDatabaseService.put(this.db, stores.paymentMethods, { ...existing, ativa: 0, atualizado_em: now() });
+  }
+
   async addTransaction(form) {
     const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "avista";
     const totalInstallments = normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
@@ -586,7 +643,8 @@ export class FinanceRepository {
       categoria: category?.nome || form.category || "",
       valor: normalizeMoney(form.amount),
       data_movimento: form.date,
-      forma_pagamento: form.paymentTarget || (form.type === "entrada" ? "transferencia" : "debito"),
+      forma_pagamento: form.paymentMethodName || form.paymentTarget || (form.type === "entrada" ? "transferencia" : "debito"),
+      forma_pagamento_id: form.paymentMethodId || null,
       condicao_pagamento: paymentMode || (totalInstallments > 1 ? "parcelado" : "avista"),
       parcela_atual: currentInstallment,
       total_parcelas: totalInstallments,
