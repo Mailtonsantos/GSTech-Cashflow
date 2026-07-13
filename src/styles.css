@@ -567,7 +567,7 @@ textarea {
 
 .transaction-layout {
   height: calc(100vh - 132px);
-  align-items: stretch;
+  align-items: start;
   overflow: hidden;
 }
 
@@ -576,6 +576,10 @@ textarea {
   max-height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.transaction-layout .list-panel {
+  height: 100%;
 }
 
 .entry-panel,
