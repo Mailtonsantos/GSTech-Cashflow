@@ -405,6 +405,31 @@ textarea {
   font-size: 1.15rem;
 }
 
+.summary-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.summary-title h3 {
+  margin-bottom: 3px;
+}
+
+.summary-title span {
+  color: #66736f;
+  text-transform: capitalize;
+}
+
+.month-filter {
+  width: min(180px, 100%);
+}
+
+.month-filter input {
+  margin-top: 4px;
+}
+
 .table-list,
 .card-list {
   display: grid;
@@ -720,11 +745,16 @@ textarea {
   }
 
   .topbar,
+  .summary-title,
   .table-row,
   .item-card {
     display: flex;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .month-filter {
+    width: 100%;
   }
 
   .item-value {

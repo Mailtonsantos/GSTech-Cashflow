@@ -26,6 +26,7 @@ const state = {
   data: null,
   view: "Resumo",
   settingsTab: "categories",
+  summaryMonth: today.slice(0, 7),
   loading: true,
   editing: {},
 };
@@ -74,6 +75,7 @@ function logout() {
   state.repository = null;
   state.data = null;
   state.view = "Resumo";
+  state.summaryMonth = today.slice(0, 7);
   state.editing = {};
   render();
 }
@@ -170,21 +172,31 @@ function viewTemplate() {
 
 function summaryTemplate() {
   const data = state.data;
+  const selectedMonth = state.summaryMonth || today.slice(0, 7);
+  const monthlyTransactions = data.transactions.filter((item) => monthKey(item.date) === selectedMonth);
   const accountBalance = data.accounts.reduce((sum, item) => sum + Number(item.balance), 0);
   const creditAvailable = data.cards.reduce((sum, item) => sum + Math.max(Number(item.limit) - Number(item.used), 0), 0);
   const income = data.incomes.reduce((sum, item) => sum + Number(item.amount), 0);
-  const expenses = data.transactions.filter((item) => item.type === "saida").reduce((sum, item) => sum + Number(item.amount), 0);
+  const expenses = monthlyTransactions.filter((item) => item.type === "saida").reduce((sum, item) => sum + Number(item.amount), 0);
 
   return `
     <section class="content-grid">
       ${metric("Saldo em contas", money(accountBalance), icons.account, "green")}
       ${metric("Limite disponivel", money(creditAvailable), icons.card, "blue")}
       ${metric("Renda mensal", money(income), icons.income, "teal")}
-      ${metric("Saidas recentes", money(expenses), "-", "rose")}
+      ${metric("Saidas do mes", money(expenses), "-", "rose")}
       <section class="wide-panel">
-        <div class="panel-title"><h3>Ultimas movimentacoes</h3></div>
+        <div class="panel-title summary-title">
+          <div>
+            <h3>Movimentacoes do mes</h3>
+            <span>${escapeHtml(monthLabel(selectedMonth))}</span>
+          </div>
+          <label class="month-filter">Mes/Ano
+            <input name="summaryMonth" type="month" value="${escapeAttribute(selectedMonth)}" />
+          </label>
+        </div>
         <div class="table-list">
-          ${data.transactions.map(transactionRow).join("")}
+          ${monthlyTransactions.length ? monthlyTransactions.map(transactionRow).join("") : `<p class="empty-state">Nenhuma movimentacao neste mes.</p>`}
         </div>
       </section>
     </section>
@@ -648,6 +660,10 @@ function bindEvents() {
 
   document.getElementById("auth-form")?.addEventListener("submit", handleAuth);
   document.getElementById("google-demo")?.addEventListener("click", handleGoogleDemo);
+  document.querySelector("[name='summaryMonth']")?.addEventListener("change", (event) => {
+    state.summaryMonth = event.target.value || today.slice(0, 7);
+    render();
+  });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
