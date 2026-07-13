@@ -657,7 +657,8 @@ export class FinanceRepository {
     const category = this.lastSnapshot?.categories?.find((item) => item.id === form.categoryId);
     const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "";
     const totalInstallments = installment?.totalInstallments ?? normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
-    const currentInstallment = installment?.currentInstallment ?? Math.min(parseInteger(form.currentInstallment, 1), totalInstallments);
+    const currentInstallment =
+      installment?.currentInstallment ?? Math.min(parseInteger(form.currentInstallment, existing?.parcela_atual || 1), totalInstallments);
 
     return {
       ...(existing || baseRecord(this.user.id)),
