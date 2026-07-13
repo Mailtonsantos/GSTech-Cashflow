@@ -382,9 +382,9 @@ function settingsSectionTemplate(formId, formTitle, fields, buttonLabel, editing
 
 function transactionsTemplate() {
   const editing = editingItem("transactions");
-  const selectedPaymentMethodId = editing?.paymentMethodId || defaultPaymentMethodId("conta");
+  const selectedPaymentMethodId = editing?.paymentMethodId || "";
   const paymentTarget = paymentMethodBehavior(selectedPaymentMethodId);
-  const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "avista") : "avista";
+  const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "") : "";
   const showCreditFields = paymentTarget === "cartao";
   const showInstallments = showCreditFields && paymentMode === "parcelado";
 
@@ -401,17 +401,19 @@ function transactionsTemplate() {
       </label>
       <label>Forma de pagamento
         <select name="paymentMethodId">
+          <option value="">--</option>
           ${state.data.paymentMethods.map((method) => option(method.id, method.nome, selectedPaymentMethodId)).join("")}
         </select>
       </label>
       <label data-credit-field class="${showCreditFields ? "" : "is-hidden"}">Cartao
         <select name="cardId">
-          <option value="">Sem cartao</option>
+          <option value="">--</option>
           ${state.data.cards.map((card) => option(card.id, card.name, editing?.cardId)).join("")}
         </select>
       </label>
       <label data-credit-field class="${showCreditFields ? "" : "is-hidden"}">Condicao
         <select name="paymentMode">
+          <option value="">--</option>
           ${option("avista", "A vista", paymentMode)}
           ${option("parcelado", "Parcelado", paymentMode)}
         </select>
@@ -451,10 +453,10 @@ function input(name, label, type, value = "") {
 }
 
 function installmentsInput(editing = null, visible = false) {
-  const mode = editing?.paymentMode || "avista";
+  const mode = editing?.paymentMode || "";
   const value = mode === "parcelado" ? Math.max(2, Number(editing?.totalInstallments || 2)) : 1;
   const min = mode === "parcelado" ? 2 : 1;
-  const readonly = mode === "avista" ? "readonly" : "";
+  const readonly = mode === "parcelado" ? "" : "readonly";
 
   return `
     <label data-installments-field class="${visible ? "" : "is-hidden"}">Numero de parcelas
@@ -574,11 +576,11 @@ function defaultPaymentMethodId(behavior) {
 }
 
 function paymentMethodById(id) {
-  return state.data.paymentMethods.find((item) => item.id === id) || state.data.paymentMethods[0] || null;
+  return state.data.paymentMethods.find((item) => item.id === id) || null;
 }
 
 function paymentMethodBehavior(id) {
-  return paymentMethodById(id)?.comportamento || "conta";
+  return paymentMethodById(id)?.comportamento || "";
 }
 
 function transactionDetail(item) {
@@ -586,7 +588,15 @@ function transactionDetail(item) {
     return `Parcela ${item.currentInstallment}/${item.totalInstallments}`;
   }
 
-  return item.paymentMode === "parcelado" ? "Parcelado" : item.type === "entrada" ? "Entrada a vista" : "Saida a vista";
+  if (item.paymentMode === "avista") {
+    return item.type === "entrada" ? "Entrada a vista" : "Saida a vista";
+  }
+
+  if (item.paymentMode === "parcelado") {
+    return "Parcelado";
+  }
+
+  return item.type === "entrada" ? "Entrada" : "Saida";
 }
 
 function bindEvents() {
@@ -656,15 +666,15 @@ function bindInstallmentControls(form) {
     installmentsWrapper?.classList.toggle("is-hidden", !isInstallment);
 
     if (!isCredit) {
-      modeField.value = "avista";
+      modeField.value = "";
       installmentsField.value = "1";
       installmentsField.min = "1";
       installmentsField.readOnly = true;
-      form.elements.cardId.value = "";
+      if (form.elements.cardId) form.elements.cardId.value = "";
       return;
     }
 
-    if (modeField.value === "avista") {
+    if (modeField.value !== "parcelado") {
       installmentsField.value = "1";
       installmentsField.min = "1";
       installmentsField.readOnly = true;
@@ -748,11 +758,11 @@ async function addTransaction(event) {
   event.preventDefault();
   const values = formValues(event.currentTarget);
   const paymentMethod = paymentMethodById(values.paymentMethodId);
-  values.paymentTarget = paymentMethod?.comportamento || "conta";
+  values.paymentTarget = paymentMethod?.comportamento || "";
   values.paymentMethodName = paymentMethod?.nome || "";
   if (values.paymentTarget !== "cartao") {
     values.cardId = "";
-    values.paymentMode = "avista";
+    values.paymentMode = "";
   }
   values.installments = String(normalizeInstallments(values.paymentTarget, values.paymentMode, values.installments));
   if (values.id) {

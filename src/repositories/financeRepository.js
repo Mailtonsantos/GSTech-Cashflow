@@ -33,6 +33,29 @@ function normalizeInstallments(paymentTarget, paymentMode, value) {
   return 1;
 }
 
+function inferPaymentTarget(item) {
+  if (item.forma_pagamento_id === "default-payment-cartao" || item.cartao_id || Number(item.total_parcelas || 1) > 1) {
+    return "cartao";
+  }
+
+  if (item.forma_pagamento_id || item.forma_pagamento) {
+    return "conta";
+  }
+
+  return "";
+}
+
+function inferPaymentMethodId(item) {
+  if (item.forma_pagamento_id) {
+    return item.forma_pagamento_id;
+  }
+
+  const target = inferPaymentTarget(item);
+  if (target === "cartao") return "default-payment-cartao";
+  if (target === "conta") return "default-payment-conta";
+  return "";
+}
+
 function addMonths(dateValue, monthsToAdd) {
   const date = new Date(`${dateValue}T00:00:00`);
   const originalDay = date.getDate();
@@ -328,24 +351,28 @@ export class FinanceRepository {
           note: item.observacao || "",
         })),
       transactions: activeTransactions
-        .map((item) => ({
-          id: item.id,
-          description: item.descricao,
-          type: item.tipo,
-          amount: normalizeMoney(item.valor),
-          category: item.categoria || "",
-          categoryId: item.categoria_id || "",
-          date: item.data_movimento,
-          cardId: item.cartao_id || "",
-          paymentMethodId: item.forma_pagamento_id || (item.cartao_id ? "default-payment-cartao" : "default-payment-conta"),
-          paymentMethodName: item.forma_pagamento || "",
-          paymentTarget: item.cartao_id ? "cartao" : "conta",
-          paymentMode: item.condicao_pagamento || (Number(item.total_parcelas || 1) > 1 ? "parcelado" : "avista"),
-          currentInstallment: Number(item.parcela_atual || 1),
-          totalInstallments: Number(item.total_parcelas || 1),
-          installmentGroupId: item.id_agrupador_parcela || "",
-          note: item.observacao || "",
-        }))
+        .map((item) => {
+          const totalInstallments = Number(item.total_parcelas || 1);
+          const paymentTarget = inferPaymentTarget(item);
+          return {
+            id: item.id,
+            description: item.descricao,
+            type: item.tipo,
+            amount: normalizeMoney(item.valor),
+            category: item.categoria || "",
+            categoryId: item.categoria_id || "",
+            date: item.data_movimento,
+            cardId: item.cartao_id || "",
+            paymentMethodId: inferPaymentMethodId(item),
+            paymentMethodName: item.forma_pagamento || "",
+            paymentTarget,
+            paymentMode: item.condicao_pagamento || (paymentTarget === "cartao" && totalInstallments > 1 ? "parcelado" : ""),
+            currentInstallment: Number(item.parcela_atual || 1),
+            totalInstallments,
+            installmentGroupId: item.id_agrupador_parcela || "",
+            note: item.observacao || "",
+          };
+        })
         .sort((a, b) => b.date.localeCompare(a.date)),
     };
   }
@@ -570,13 +597,13 @@ export class FinanceRepository {
   }
 
   async addTransaction(form) {
-    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "avista";
+    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "";
     const totalInstallments = normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
     const isInstallmentPurchase =
       paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
 
     if (!isInstallmentPurchase) {
-      return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord({ ...form, installments: 1, paymentMode: "avista" }));
+      return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord({ ...form, installments: 1, paymentMode }));
     }
 
     const groupId = id();
@@ -628,7 +655,7 @@ export class FinanceRepository {
 
   transactionRecord(form, existing = null, installment = null) {
     const category = this.lastSnapshot?.categories?.find((item) => item.id === form.categoryId);
-    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "avista";
+    const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "";
     const totalInstallments = installment?.totalInstallments ?? normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
     const currentInstallment = installment?.currentInstallment ?? Math.min(parseInteger(form.currentInstallment, 1), totalInstallments);
 
@@ -643,9 +670,9 @@ export class FinanceRepository {
       categoria: category?.nome || form.category || "",
       valor: normalizeMoney(form.amount),
       data_movimento: form.date,
-      forma_pagamento: form.paymentMethodName || form.paymentTarget || (form.type === "entrada" ? "transferencia" : "debito"),
+      forma_pagamento: form.paymentMethodName || "",
       forma_pagamento_id: form.paymentMethodId || null,
-      condicao_pagamento: paymentMode || (totalInstallments > 1 ? "parcelado" : "avista"),
+      condicao_pagamento: paymentMode || (totalInstallments > 1 ? "parcelado" : ""),
       parcela_atual: currentInstallment,
       total_parcelas: totalInstallments,
       id_agrupador_parcela: installment?.groupId || form.installmentGroupId || existing?.id_agrupador_parcela || null,
