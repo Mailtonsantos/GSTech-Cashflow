@@ -27,6 +27,7 @@ const state = {
   view: "Resumo",
   settingsTab: "categories",
   summaryMonth: today.slice(0, 7),
+  summaryCardId: "",
   transactionSearch: "",
   transactionSort: "parcel",
   loading: true,
@@ -78,6 +79,7 @@ function logout() {
   state.data = null;
   state.view = "Resumo";
   state.summaryMonth = today.slice(0, 7);
+  state.summaryCardId = "";
   state.transactionSearch = "";
   state.transactionSort = "parcel";
   state.editing = {};
@@ -177,7 +179,11 @@ function viewTemplate() {
 function summaryTemplate() {
   const data = state.data;
   const selectedMonth = state.summaryMonth || today.slice(0, 7);
-  const monthlyTransactions = data.transactions.filter((item) => monthKey(item.date) === selectedMonth);
+  const selectedCardId = state.summaryCardId || "";
+  const monthlyTransactions = data.transactions.filter(
+    (item) => monthKey(item.date) === selectedMonth && (!selectedCardId || item.cardId === selectedCardId),
+  );
+  const selectedCard = data.cards.find((card) => card.id === selectedCardId);
   const accountBalance = data.accounts.reduce((sum, item) => sum + Number(item.balance), 0);
   const creditAvailable = data.cards.reduce((sum, item) => sum + Math.max(Number(item.limit) - Number(item.used), 0), 0);
   const income = data.incomes.reduce((sum, item) => sum + Number(item.amount), 0);
@@ -193,14 +199,22 @@ function summaryTemplate() {
         <div class="panel-title summary-title">
           <div>
             <h3>Movimentacoes do mes</h3>
-            <span>${escapeHtml(monthLabel(selectedMonth))}</span>
+            <span>${escapeHtml(monthLabel(selectedMonth))}${selectedCard ? ` | ${escapeHtml(selectedCard.name)}` : " | Todos"}</span>
           </div>
-          <label class="month-filter">Mes/Ano
-            <input name="summaryMonth" type="month" value="${escapeAttribute(selectedMonth)}" />
-          </label>
+          <div class="summary-filters">
+            <label class="month-filter">Mes/Ano
+              <input name="summaryMonth" type="month" value="${escapeAttribute(selectedMonth)}" />
+            </label>
+            <label class="card-filter">Cartao
+              <select name="summaryCardId">
+                <option value="">Todos</option>
+                ${data.cards.map((card) => option(card.id, card.name, selectedCardId)).join("")}
+              </select>
+            </label>
+          </div>
         </div>
         <div class="table-list">
-          ${monthlyTransactions.length ? monthlyTransactions.map(transactionRow).join("") : `<p class="empty-state">Nenhuma movimentacao neste mes.</p>`}
+          ${monthlyTransactions.length ? monthlyTransactions.map((item) => transactionRow(item, data.cards)).join("") : `<p class="empty-state">Nenhuma movimentacao neste filtro.</p>`}
         </div>
       </section>
     </section>
@@ -211,12 +225,14 @@ function metric(title, value, icon, tone) {
   return `<article class="metric ${tone}"><div class="metric-icon">${icon}</div><span>${title}</span><strong>${value}</strong></article>`;
 }
 
-function transactionRow(item) {
+function transactionRow(item, cards = []) {
   const sign = item.type === "entrada" ? "+" : "-";
   const tone = item.type === "entrada" ? "positive" : "negative";
+  const card = item.cardId ? cards.find((candidate) => candidate.id === item.cardId) : null;
+  const meta = [item.category || "Sem categoria", formatDate(item.date), card ? `Cartao: ${card.name}` : ""].filter(Boolean).join(" - ");
   return `
     <div class="table-row">
-      <div><strong>${escapeHtml(item.description)}</strong><span>${escapeHtml(item.category)} - ${formatDate(item.date)}</span></div>
+      <div><strong>${escapeHtml(item.description)}</strong><span>${escapeHtml(meta)}</span></div>
       <b class="${tone}">${sign} ${money(item.amount)}</b>
     </div>
   `;
@@ -732,6 +748,10 @@ function bindEvents() {
   document.getElementById("google-demo")?.addEventListener("click", handleGoogleDemo);
   document.querySelector("[name='summaryMonth']")?.addEventListener("change", (event) => {
     state.summaryMonth = event.target.value || today.slice(0, 7);
+    render();
+  });
+  document.querySelector("[name='summaryCardId']")?.addEventListener("change", (event) => {
+    state.summaryCardId = event.target.value || "";
     render();
   });
   document.querySelector("[name='transactionSearch']")?.addEventListener("input", (event) => {

@@ -422,11 +422,20 @@ textarea {
   text-transform: capitalize;
 }
 
-.month-filter {
-  width: min(180px, 100%);
+.summary-filters {
+  display: grid;
+  grid-template-columns: minmax(150px, 180px) minmax(180px, 240px);
+  gap: 10px;
+  align-items: end;
 }
 
-.month-filter input {
+.month-filter,
+.card-filter {
+  width: 100%;
+}
+
+.month-filter input,
+.card-filter select {
   margin-top: 4px;
 }
 
@@ -765,8 +774,14 @@ textarea {
     flex-direction: column;
   }
 
-  .month-filter {
+  .summary-filters,
+  .month-filter,
+  .card-filter {
     width: 100%;
+  }
+
+  .summary-filters {
+    grid-template-columns: 1fr;
   }
 
   .history-toolbar {
