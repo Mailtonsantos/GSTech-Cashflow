@@ -27,6 +27,8 @@ const state = {
   view: "Resumo",
   settingsTab: "categories",
   summaryMonth: today.slice(0, 7),
+  transactionSearch: "",
+  transactionSort: "parcel",
   loading: true,
   editing: {},
 };
@@ -76,6 +78,8 @@ function logout() {
   state.data = null;
   state.view = "Resumo";
   state.summaryMonth = today.slice(0, 7);
+  state.transactionSearch = "";
+  state.transactionSort = "parcel";
   state.editing = {};
   render();
 }
@@ -399,7 +403,22 @@ function transactionsTemplate() {
   const paymentMode = paymentTarget === "cartao" ? (editing?.paymentMode || "") : "";
   const showCreditFields = paymentTarget === "cartao";
   const showInstallments = showCreditFields && paymentMode === "parcelado";
-  const historyContent = monthlyTransactionHistory(state.data.transactions);
+  const historyTransactions = filterAndSortTransactions(state.data.transactions);
+  const historyContent = monthlyTransactionHistory(historyTransactions);
+  const historyControls = `
+    <div class="history-toolbar">
+      <label>Localizar
+        <input name="transactionSearch" type="search" placeholder="Descricao, valor, categoria..." value="${escapeAttribute(state.transactionSearch)}" />
+      </label>
+      <label>Ordenar
+        <select name="transactionSort">
+          ${option("parcel", "Ordem das parcelas", state.transactionSort)}
+          ${option("date_desc", "Data: mais recente", state.transactionSort)}
+          ${option("date_asc", "Data: mais antiga", state.transactionSort)}
+        </select>
+      </label>
+    </div>
+  `;
 
   return twoColumnTemplate("transaction-form", editing ? "Editar movimentacao" : "Nova movimentacao", `
     ${hiddenId(editing)}
@@ -436,10 +455,10 @@ function transactionsTemplate() {
       ${input("date", "Data", "date", editing?.date || today)}
     </div>
     ${textarea("note", "Observacoes", editing?.note)}
-  `, "Historico", historyContent, editing, "transaction-layout");
+  `, "Historico", historyContent, editing, "transaction-layout", historyControls);
 }
 
-function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null, layoutClass = "") {
+function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null, layoutClass = "", listControls = "") {
   return `
     <section class="two-column ${layoutClass}">
       <form class="entry-panel" id="${formId}">
@@ -452,7 +471,8 @@ function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, ed
       </form>
       <section class="list-panel">
         <div class="panel-title"><h3>${listTitle}</h3></div>
-        <div class="card-list">${listContent || `<p class="empty-state">Nenhum item cadastrado ainda.</p>`}</div>
+        ${listControls}
+        <div class="card-list" ${layoutClass.includes("transaction-layout") ? "data-transaction-history" : ""}>${listContent || `<p class="empty-state">${layoutClass.includes("transaction-layout") ? "Nenhum lancamento encontrado." : "Nenhum item cadastrado ainda."}</p>`}</div>
       </section>
     </section>
   `;
@@ -485,6 +505,56 @@ function monthlyTransactionHistory(transactions) {
     .join("");
 }
 
+function filterAndSortTransactions(transactions) {
+  const query = normalizeSearch(state.transactionSearch);
+  const filtered = query
+    ? transactions.filter((item) => transactionMatchesSearch(item, query))
+    : [...transactions];
+
+  return sortTransactions(filtered, state.transactionSort);
+}
+
+function transactionMatchesSearch(item, query) {
+  const amount = Number(item.amount || 0);
+  const fields = [
+    item.description,
+    item.category,
+    item.note,
+    item.paymentMethodName,
+    item.type,
+    formatDate(item.date),
+    money(amount),
+    String(amount).replace(".", ","),
+    String(amount),
+  ];
+
+  return normalizeSearch(fields.join(" ")).includes(query);
+}
+
+function sortTransactions(transactions, sortMode) {
+  const items = [...transactions];
+
+  if (sortMode === "date_desc") {
+    return items.sort((a, b) => compareByDate(b, a) || compareByParcel(a, b));
+  }
+
+  if (sortMode === "date_asc") {
+    return items.sort((a, b) => compareByDate(a, b) || compareByParcel(a, b));
+  }
+
+  return items.sort((a, b) => compareByParcel(a, b) || compareByDate(b, a));
+}
+
+function compareByDate(a, b) {
+  return String(a.date || "").localeCompare(String(b.date || ""));
+}
+
+function compareByParcel(a, b) {
+  const groupA = a.installmentGroupId || a.description || a.id;
+  const groupB = b.installmentGroupId || b.description || b.id;
+  return String(groupA).localeCompare(String(groupB)) || Number(a.currentInstallment || 1) - Number(b.currentInstallment || 1);
+}
+
 function groupTransactionsByMonth(transactions) {
   const groups = new Map();
 
@@ -497,7 +567,7 @@ function groupTransactionsByMonth(transactions) {
   });
 
   return [...groups.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort(([a], [b]) => state.transactionSort === "date_asc" ? a.localeCompare(b) : b.localeCompare(a))
     .map(([key, items]) => ({ key, items }));
 }
 
@@ -664,6 +734,14 @@ function bindEvents() {
     state.summaryMonth = event.target.value || today.slice(0, 7);
     render();
   });
+  document.querySelector("[name='transactionSearch']")?.addEventListener("input", (event) => {
+    state.transactionSearch = event.target.value;
+    refreshTransactionHistory();
+  });
+  document.querySelector("[name='transactionSort']")?.addEventListener("change", (event) => {
+    state.transactionSort = event.target.value || "parcel";
+    refreshTransactionHistory();
+  });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -704,6 +782,27 @@ function bindEvents() {
   const transactionForm = document.getElementById("transaction-form");
   transactionForm?.addEventListener("submit", addTransaction);
   bindInstallmentControls(transactionForm);
+}
+
+function refreshTransactionHistory() {
+  const list = document.querySelector("[data-transaction-history]");
+  if (!list) return;
+
+  const content = monthlyTransactionHistory(filterAndSortTransactions(state.data.transactions));
+  list.innerHTML = content || `<p class="empty-state">Nenhum lancamento encontrado.</p>`;
+  bindCatalogActions(list);
+}
+
+function bindCatalogActions(scope = document) {
+  scope.querySelectorAll("[data-action='edit']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editing = { [button.dataset.kind]: button.dataset.id };
+      render();
+    });
+  });
+  scope.querySelectorAll("[data-action='delete']").forEach((button) => {
+    button.addEventListener("click", () => deleteItem(button.dataset.kind, button.dataset.id));
+  });
 }
 
 function bindInstallmentControls(form) {
@@ -922,6 +1021,14 @@ function normalizeInstallments(paymentTarget, paymentMode, value) {
   }
 
   return 1;
+}
+
+function normalizeSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function escapeHtml(value) {

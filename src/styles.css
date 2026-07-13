@@ -430,6 +430,18 @@ textarea {
   margin-top: 4px;
 }
 
+.history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.history-toolbar input,
+.history-toolbar select {
+  margin-top: 4px;
+}
+
 .table-list,
 .card-list {
   display: grid;
@@ -755,6 +767,10 @@ textarea {
 
   .month-filter {
     width: 100%;
+  }
+
+  .history-toolbar {
+    grid-template-columns: 1fr;
   }
 
   .item-value {
