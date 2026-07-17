@@ -604,6 +604,62 @@ textarea {
   align-items: start;
 }
 
+.backup-page {
+  display: grid;
+  grid-template-columns: minmax(300px, 448px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.backup-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.backup-note,
+.backup-message {
+  margin: 0;
+  color: #52625e;
+  line-height: 1.45;
+}
+
+.backup-message {
+  padding: 10px 12px;
+  border: 1px solid #b6ead4;
+  border-radius: 8px;
+  background: #e4f8ec;
+  color: #0f766e;
+}
+
+.backup-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.backup-counts span,
+.file-button {
+  padding: 9px 10px;
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #f8fbfa;
+  color: #52625e;
+  font-size: 0.875rem;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #0f766e;
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
 .two-column {
   display: grid;
   grid-template-columns: minmax(300px, 448px) minmax(0, 1fr);
@@ -750,7 +806,8 @@ textarea {
   }
 
   .two-column,
-  .settings-section {
+  .settings-section,
+  .backup-page {
     grid-template-columns: 1fr;
   }
 

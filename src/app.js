@@ -1,5 +1,6 @@
 import { FinanceRepository } from "./repositories/financeRepository.js";
 import { AuthService } from "./services/authService.js";
+import { BackupService } from "./services/backupService.js";
 import { LocalDatabaseService } from "./services/localDatabase.js";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -30,6 +31,8 @@ const state = {
   summaryCardId: "",
   transactionSearch: "",
   transactionSort: "parcel",
+  backups: [],
+  backupMessage: "",
   loading: true,
   editing: {},
 };
@@ -57,6 +60,14 @@ async function startUserSession(user, persistSession = true) {
   state.user = user;
   state.data = await state.repository.getSnapshot();
   state.repository.setSnapshot(state.data);
+  state.backups = await BackupService.listBackups(user.id);
+  if (!state.backups.length) {
+    try {
+      await createBackup("inicial");
+    } catch (error) {
+      state.backupMessage = `Nao foi possivel criar backup inicial: ${error.message || error}`;
+    }
+  }
   state.loading = false;
 
   if (persistSession) {
@@ -69,7 +80,25 @@ async function startUserSession(user, persistSession = true) {
 async function refreshData() {
   state.data = await state.repository.getSnapshot();
   state.repository.setSnapshot(state.data);
+  state.backups = await BackupService.listBackups(state.user.id);
   render();
+}
+
+async function createBackup(reason = "manual") {
+  const snapshot = await state.repository.exportRawSnapshot();
+  const backup = await BackupService.createBackup({ user: state.user, snapshot, reason });
+  state.backups = await BackupService.listBackups(state.user.id);
+  state.backupMessage = `Backup criado em ${formatDateTime(backup.criado_em)}.`;
+  return backup;
+}
+
+async function refreshDataWithBackup(reason) {
+  try {
+    await createBackup(reason);
+  } catch (error) {
+    state.backupMessage = `Nao foi possivel criar backup automatico: ${error.message || error}`;
+  }
+  await refreshData();
 }
 
 function logout() {
@@ -82,6 +111,8 @@ function logout() {
   state.summaryCardId = "";
   state.transactionSearch = "";
   state.transactionSort = "parcel";
+  state.backups = [];
+  state.backupMessage = "";
   state.editing = {};
   render();
 }
@@ -336,6 +367,7 @@ function categoriesTemplate() {
     ["categories", "Categorias"],
     ["brands", "Bandeiras"],
     ["paymentMethods", "Forma de pagamento"],
+    ["backup", "Backup"],
   ];
 
   return `
@@ -389,7 +421,64 @@ function categoriesTemplate() {
         "Formas de pagamento",
         state.data.paymentMethods.map((item) => catalogCard("paymentMethods", item.id, item.nome, paymentBehaviorLabel(item.comportamento), item.observacao, Boolean(item.user_id))).join(""),
       ) : ""}
+      ${activeTab === "backup" ? backupTemplate() : ""}
     </section>
+  `;
+}
+
+function backupTemplate() {
+  const counts = {
+    accounts: state.data.accounts.length,
+    cards: state.data.cards.length,
+    incomes: state.data.incomes.length,
+    transactions: state.data.transactions.length,
+  };
+
+  return `
+    <section class="backup-page">
+      <section class="entry-panel backup-panel">
+        <div class="panel-title"><h3>Seguranca dos dados</h3></div>
+        <p class="backup-note">Os backups ficam em um banco local separado e tambem podem ser exportados em JSON para guardar fora do navegador.</p>
+        <div class="backup-counts">
+          <span>Contas: <strong>${counts.accounts}</strong></span>
+          <span>Cartoes: <strong>${counts.cards}</strong></span>
+          <span>Rendas: <strong>${counts.incomes}</strong></span>
+          <span>Movimentos: <strong>${counts.transactions}</strong></span>
+        </div>
+        ${state.backupMessage ? `<p class="backup-message">${escapeHtml(state.backupMessage)}</p>` : ""}
+        <button class="primary-button" type="button" data-backup-action="create">${icons.plus} <span>Criar backup agora</span></button>
+        <button class="ghost-button" type="button" data-backup-action="export-latest">Exportar ultimo backup</button>
+        <label class="file-button">Importar backup JSON
+          <input name="backupFile" type="file" accept="application/json,.json" />
+        </label>
+      </section>
+      <section class="list-panel">
+        <div class="panel-title"><h3>Backups disponiveis</h3></div>
+        <div class="card-list">
+          ${state.backups.length ? state.backups.map(backupCard).join("") : `<p class="empty-state">Nenhum backup local criado ainda.</p>`}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function backupCard(item) {
+  const counts = item.counts || {};
+  return `
+    <article class="item-card">
+      <div>
+        <strong>${escapeHtml(formatDateTime(item.criado_em))}</strong>
+        <span>${escapeHtml(item.reason || "manual")} | Movimentos: ${counts.transactions || 0} | Cartoes: ${counts.cards || 0}</span>
+      </div>
+      <div class="item-value">
+        <b>${escapeHtml(item.user_email || state.user.email || "")}</b>
+        <div class="card-actions" aria-label="Acoes do backup">
+          <button class="icon-action" type="button" data-backup-action="download" data-backup-id="${escapeAttribute(item.id)}" title="Exportar" aria-label="Exportar">&#8681;</button>
+          <button class="icon-action" type="button" data-backup-action="restore" data-backup-id="${escapeAttribute(item.id)}" title="Restaurar" aria-label="Restaurar">&#8634;</button>
+          <button class="icon-action danger" type="button" data-backup-action="delete" data-backup-id="${escapeAttribute(item.id)}" title="Excluir backup" aria-label="Excluir backup">&#128465;</button>
+        </div>
+      </div>
+    </article>
   `;
 }
 
@@ -799,9 +888,77 @@ function bindEvents() {
   document.getElementById("category-form")?.addEventListener("submit", addCategory);
   document.getElementById("brand-form")?.addEventListener("submit", addBrand);
   document.getElementById("payment-method-form")?.addEventListener("submit", addPaymentMethod);
+  document.querySelectorAll("[data-backup-action]").forEach((button) => {
+    button.addEventListener("click", () => handleBackupAction(button.dataset.backupAction, button.dataset.backupId));
+  });
+  document.querySelector("[name='backupFile']")?.addEventListener("change", importBackupFile);
   const transactionForm = document.getElementById("transaction-form");
   transactionForm?.addEventListener("submit", addTransaction);
   bindInstallmentControls(transactionForm);
+}
+
+async function handleBackupAction(action, backupId = "") {
+  if (action === "create") {
+    await createBackup("manual");
+    render();
+    return;
+  }
+
+  if (action === "export-latest") {
+    const backup = state.backups[0] || await createBackup("manual");
+    BackupService.downloadBackup(backup);
+    return;
+  }
+
+  const backup = backupId ? await BackupService.getBackup(backupId) : null;
+  if (!backup) return;
+
+  if (action === "download") {
+    BackupService.downloadBackup(backup);
+    return;
+  }
+
+  if (action === "restore") {
+    const ok = confirm("Restaurar este backup vai substituir os dados atuais deste usuario. Deseja continuar?");
+    if (!ok) return;
+    await createBackup("antes-restauracao");
+    await state.repository.restoreRawSnapshot(backup.snapshot);
+    state.backupMessage = `Backup restaurado de ${formatDateTime(backup.criado_em)}.`;
+    await refreshData();
+    return;
+  }
+
+  if (action === "delete") {
+    await BackupService.deleteBackup(backupId);
+    state.backups = await BackupService.listBackups(state.user.id);
+    state.backupMessage = "Backup removido.";
+    render();
+  }
+}
+
+async function importBackupFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const backup = await BackupService.readBackupFile(file);
+    if (!backup?.snapshot) {
+      throw new Error("Arquivo de backup invalido.");
+    }
+
+    const ok = confirm("Importar este backup vai substituir os dados atuais deste usuario. Deseja continuar?");
+    if (!ok) return;
+    await createBackup("antes-importacao");
+    await state.repository.restoreRawSnapshot(backup.snapshot);
+    await createBackup("importado");
+    state.backupMessage = "Backup importado e restaurado.";
+    await refreshData();
+  } catch (error) {
+    state.backupMessage = error.message || "Nao foi possivel importar o backup.";
+    render();
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function refreshTransactionHistory() {
@@ -904,7 +1061,7 @@ async function addAccount(event) {
     await state.repository.addBankAccount(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("conta");
 }
 
 async function addCard(event) {
@@ -916,7 +1073,7 @@ async function addCard(event) {
     await state.repository.addCreditCard(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("cartao");
 }
 
 async function addIncome(event) {
@@ -928,7 +1085,7 @@ async function addIncome(event) {
     await state.repository.addIncome(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("renda");
 }
 
 async function addTransaction(event) {
@@ -948,7 +1105,7 @@ async function addTransaction(event) {
     await state.repository.addTransaction(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("movimentacao");
 }
 
 async function addCategory(event) {
@@ -960,7 +1117,7 @@ async function addCategory(event) {
     await state.repository.addCategory(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("categoria");
 }
 
 async function addBrand(event) {
@@ -972,7 +1129,7 @@ async function addBrand(event) {
     await state.repository.addBrand(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("bandeira");
 }
 
 async function addPaymentMethod(event) {
@@ -984,7 +1141,7 @@ async function addPaymentMethod(event) {
     await state.repository.addPaymentMethod(values);
   }
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup("forma-pagamento");
 }
 
 async function deleteItem(kind, id) {
@@ -1001,7 +1158,7 @@ async function deleteItem(kind, id) {
 
   await actions[kind]?.();
   state.editing = {};
-  await refreshData();
+  await refreshDataWithBackup(`exclusao-${kind}`);
 }
 
 function formValues(form) {
@@ -1014,6 +1171,10 @@ function formValues(form) {
 
 function formatDate(date) {
   return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString("pt-BR");
 }
 
 function monthKey(date) {

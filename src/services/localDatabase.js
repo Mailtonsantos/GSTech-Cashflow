@@ -23,6 +23,10 @@ const userScopedStores = [
   stores.transactions,
 ];
 
+const backupDatabaseName = "gstec_cashflow_backups";
+const backupDatabaseVersion = 1;
+const backupStore = "backups";
+
 function databaseName(userId) {
   return `gstec_cashflow_${String(userId).replace(/[^a-z0-9_-]/gi, "_")}`;
 }
@@ -59,8 +63,27 @@ async function run(db, storeName, mode, callback) {
   return result;
 }
 
+function openBackupDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(backupDatabaseName, backupDatabaseVersion);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(backupStore)) {
+        const store = db.createObjectStore(backupStore, { keyPath: "id" });
+        store.createIndex("user_id", "user_id", { unique: false });
+        store.createIndex("criado_em", "criado_em", { unique: false });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export const LocalDatabaseService = {
   stores,
+  backupStore,
 
   openForUser(userId) {
     return new Promise((resolve, reject) => {
@@ -95,4 +118,14 @@ export const LocalDatabaseService = {
   async getAll(db, storeName) {
     return run(db, storeName, "readonly", (store) => requestToPromise(store.getAll()));
   },
+
+  async delete(db, storeName, key) {
+    await run(db, storeName, "readwrite", (store) => store.delete(key));
+  },
+
+  async clear(db, storeName) {
+    await run(db, storeName, "readwrite", (store) => store.clear());
+  },
+
+  openBackupDatabase,
 };

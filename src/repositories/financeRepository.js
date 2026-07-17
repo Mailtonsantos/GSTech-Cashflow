@@ -229,6 +229,91 @@ export class FinanceRepository {
     await this.ensureCatalogs();
   }
 
+  async exportRawSnapshot() {
+    const [user, userDetails, brands, categories, paymentMethods, accounts, cards, incomes, transactions] = await Promise.all([
+      LocalDatabaseService.get(this.db, stores.users, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.userDetails, this.user.id),
+      LocalDatabaseService.getAll(this.db, stores.cardBrands),
+      LocalDatabaseService.getAll(this.db, stores.categories),
+      LocalDatabaseService.getAll(this.db, stores.paymentMethods),
+      LocalDatabaseService.getAllByUser(this.db, stores.bankAccounts, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.creditCards, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.incomes, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
+    ]);
+
+    return {
+      user,
+      userDetails,
+      brands: brands.filter((item) => !item.user_id || item.user_id === this.user.id),
+      categories: categories.filter((item) => !item.user_id || item.user_id === this.user.id),
+      paymentMethods: paymentMethods.filter((item) => !item.user_id || item.user_id === this.user.id),
+      accounts,
+      cards,
+      incomes,
+      transactions,
+    };
+  }
+
+  async restoreRawSnapshot(snapshot) {
+    if (!snapshot?.transactions || !snapshot?.accounts || !snapshot?.cards) {
+      throw new Error("Backup invalido ou incompleto.");
+    }
+
+    const userRecord = snapshot.user || toUserRecord(this.user);
+    await LocalDatabaseService.put(this.db, stores.users, {
+      ...userRecord,
+      id: this.user.id,
+      nome: this.user.name,
+      email: this.user.email,
+      atualizado_em: now(),
+    });
+
+    await Promise.all([
+      this.replaceUserStore(stores.userDetails, snapshot.userDetails || []),
+      this.replaceUserStore(stores.bankAccounts, snapshot.accounts || []),
+      this.replaceUserStore(stores.creditCards, snapshot.cards || []),
+      this.replaceUserStore(stores.incomes, snapshot.incomes || []),
+      this.replaceUserStore(stores.transactions, snapshot.transactions || []),
+      this.replaceCatalogStore(stores.cardBrands, snapshot.brands || []),
+      this.replaceCatalogStore(stores.categories, snapshot.categories || []),
+      this.replaceCatalogStore(stores.paymentMethods, snapshot.paymentMethods || []),
+    ]);
+
+    await this.ensureCatalogs();
+  }
+
+  async replaceUserStore(storeName, records) {
+    const existing = await LocalDatabaseService.getAllByUser(this.db, storeName, this.user.id);
+    await Promise.all(existing.map((item) => LocalDatabaseService.delete(this.db, storeName, item.id)));
+    await Promise.all(
+      records.map((item) =>
+        LocalDatabaseService.put(this.db, storeName, {
+          ...item,
+          user_id: this.user.id,
+          atualizado_em: now(),
+        }),
+      ),
+    );
+  }
+
+  async replaceCatalogStore(storeName, records) {
+    const existing = await LocalDatabaseService.getAll(this.db, storeName);
+    const removable = existing.filter((item) => item.user_id === this.user.id);
+    await Promise.all(removable.map((item) => LocalDatabaseService.delete(this.db, storeName, item.id)));
+    await Promise.all(
+      records
+        .filter((item) => item.user_id)
+        .map((item) =>
+          LocalDatabaseService.put(this.db, storeName, {
+            ...item,
+            user_id: this.user.id,
+            atualizado_em: now(),
+          }),
+        ),
+    );
+  }
+
   async ensureCatalogs() {
     const [brands, categories, paymentMethods] = await Promise.all([
       LocalDatabaseService.getAll(this.db, stores.cardBrands),

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diagnostico GSTec Cashflow</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: Arial, sans-serif;
+        background: #f6f8f7;
+        color: #16211f;
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+
+      section {
+        padding: 16px;
+        border: 1px solid #dde7e3;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      h1,
+      h2 {
+        margin: 0 0 10px;
+      }
+
+      pre {
+        overflow: auto;
+        padding: 12px;
+        border-radius: 8px;
+        background: #edf3f0;
+      }
+
+      .ok { color: #0f766e; }
+      .warn { color: #b45309; }
+      .error { color: #b42318; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Diagnostico GSTec Cashflow</h1>
+        <p>Esta pagina le apenas os dados locais deste navegador/origem.</p>
+      </section>
+      <section>
+        <h2>Sessao ativa</h2>
+        <pre id="session">Carregando...</pre>
+      </section>
+      <section>
+        <h2>Bancos IndexedDB encontrados</h2>
+        <pre id="databases">Carregando...</pre>
+      </section>
+    </main>
+    <script type="module">
+      const sessionKey = "gstec-cashflow:session";
+      const stores = [
+        "usuarios",
+        "contas_bancarias",
+        "cartoes_credito",
+        "rendas",
+        "movimentacoes",
+        "categorias_movimentacao",
+        "bandeiras_cartao",
+        "formas_pagamento",
+      ];
+
+      const sessionEl = document.getElementById("session");
+      const databasesEl = document.getElementById("databases");
+
+      function openDb(name) {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(name);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+          request.onblocked = () => reject(new Error("Abertura bloqueada"));
+        });
+      }
+
+      function countStore(db, storeName) {
+        return new Promise((resolve) => {
+          if (!db.objectStoreNames.contains(storeName)) {
+            resolve(null);
+            return;
+          }
+
+          const transaction = db.transaction(storeName, "readonly");
+          const request = transaction.objectStore(storeName).count();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => resolve(`erro: ${request.error?.message || request.error}`);
+        });
+      }
+
+      async function inspectDb(name) {
+        const db = await openDb(name);
+        const counts = {};
+        for (const storeName of stores) {
+          counts[storeName] = await countStore(db, storeName);
+        }
+        db.close();
+        return { name, version: db.version, counts };
+      }
+
+      async function run() {
+        const rawSession = localStorage.getItem(sessionKey);
+        sessionEl.textContent = rawSession ? JSON.stringify(JSON.parse(rawSession), null, 2) : "Nenhuma sessao ativa no localStorage.";
+
+        if (!indexedDB.databases) {
+          databasesEl.textContent = "Este navegador nao disponibiliza indexedDB.databases().";
+          return;
+        }
+
+        const dbs = await indexedDB.databases();
+        const cashflowDbs = dbs.filter((item) => item.name?.startsWith("gstec_cashflow_"));
+        const details = [];
+
+        for (const item of cashflowDbs) {
+          try {
+            details.push(await inspectDb(item.name));
+          } catch (error) {
+            details.push({ name: item.name, error: error.message || String(error) });
+          }
+        }
+
+        databasesEl.textContent = details.length ? JSON.stringify(details, null, 2) : "Nenhum banco gstec_cashflow_* encontrado neste navegador/origem.";
+      }
+
+      run().catch((error) => {
+        databasesEl.textContent = error.stack || error.message || String(error);
+      });
+    </script>
+  </body>
+</html>
