@@ -65,6 +65,27 @@ function addMonths(dateValue, monthsToAdd) {
   return date.toISOString().slice(0, 10);
 }
 
+function dateWithDay(dateValue, dayValue) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const day = Math.max(1, parseInteger(dayValue, date.getDate()));
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
+  return date.toISOString().slice(0, 10);
+}
+
+function creditInvoiceDate(purchaseDate, card) {
+  if (!card) {
+    return purchaseDate;
+  }
+
+  const closingDay = Math.max(1, parseInteger(card.dia_fechamento, 1));
+  const dueDay = Math.max(1, parseInteger(card.dia_vencimento, closingDay));
+  const date = new Date(`${purchaseDate}T00:00:00`);
+  const invoiceMonthDate = date.getDate() >= closingDay ? addMonths(purchaseDate, 1) : purchaseDate;
+
+  return dateWithDay(invoiceMonthDate, dueDay);
+}
+
 function splitInstallments(total, installments) {
   const cents = Math.round(normalizeMoney(total) * 100);
   const count = Math.max(1, parseInteger(installments, 1));
@@ -720,9 +741,15 @@ export class FinanceRepository {
     const totalInstallments = normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
     const isInstallmentPurchase =
       paymentMode === "parcelado" && form.type === "saida" && form.paymentTarget === "cartao" && totalInstallments > 1;
+    const card = form.paymentTarget === "cartao" ? await LocalDatabaseService.get(this.db, stores.creditCards, form.cardId) : null;
+    const invoiceDate = form.paymentTarget === "cartao" && form.type === "saida" ? creditInvoiceDate(form.date, card) : form.date;
 
     if (!isInstallmentPurchase) {
-      return LocalDatabaseService.put(this.db, stores.transactions, this.transactionRecord({ ...form, installments: 1, paymentMode }));
+      return LocalDatabaseService.put(
+        this.db,
+        stores.transactions,
+        this.transactionRecord({ ...form, date: invoiceDate, installments: 1, paymentMode }),
+      );
     }
 
     const groupId = id();
@@ -737,7 +764,7 @@ export class FinanceRepository {
             {
               ...form,
               amount,
-              date: addMonths(form.date, index),
+              date: addMonths(invoiceDate, index),
               paymentMode: "parcelado",
             },
             null,

@@ -332,7 +332,7 @@ function invoicePeriodFor(dateValue: string, card?: CartaoCreditoRecord) {
   let mes = date.getMonth() + 1;
   let ano = date.getFullYear();
 
-  if (card && date.getDate() > card.dia_fechamento) {
+  if (card && date.getDate() >= card.dia_fechamento) {
     mes += 1;
     if (mes > 12) {
       mes = 1;
