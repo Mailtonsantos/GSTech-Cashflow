@@ -9,6 +9,7 @@ function countItems(snapshot) {
   return {
     accounts: snapshot.accounts?.length || 0,
     cards: snapshot.cards?.length || 0,
+    cardPayments: snapshot.cardPayments?.length || 0,
     incomes: snapshot.incomes?.length || 0,
     transactions: snapshot.transactions?.length || 0,
     categories: snapshot.categories?.length || 0,

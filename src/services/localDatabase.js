@@ -1,4 +1,4 @@
-const databaseVersion = 3;
+const databaseVersion = 4;
 
 const stores = {
   users: "usuarios",
@@ -8,6 +8,7 @@ const stores = {
   paymentMethods: "formas_pagamento",
   bankAccounts: "contas_bancarias",
   creditCards: "cartoes_credito",
+  cardPayments: "pagamentos_cartao",
   incomes: "rendas",
   transactions: "movimentacoes",
 };
@@ -19,6 +20,7 @@ const userScopedStores = [
   stores.paymentMethods,
   stores.bankAccounts,
   stores.creditCards,
+  stores.cardPayments,
   stores.incomes,
   stores.transactions,
 ];

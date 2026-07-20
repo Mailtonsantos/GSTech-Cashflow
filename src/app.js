@@ -29,6 +29,7 @@ const state = {
   settingsTab: "categories",
   summaryMonth: today.slice(0, 7),
   summaryCardId: "",
+  expensePopoverOpen: false,
   transactionSearch: "",
   transactionSort: "parcel",
   backups: [],
@@ -109,6 +110,7 @@ function logout() {
   state.view = "Resumo";
   state.summaryMonth = today.slice(0, 7);
   state.summaryCardId = "";
+  state.expensePopoverOpen = false;
   state.transactionSearch = "";
   state.transactionSort = "parcel";
   state.backups = [];
@@ -219,13 +221,14 @@ function summaryTemplate() {
   const creditAvailable = data.cards.reduce((sum, item) => sum + Math.max(Number(item.limit) - Number(item.used), 0), 0);
   const income = data.incomes.reduce((sum, item) => sum + Number(item.amount), 0);
   const expenses = monthlyTransactions.filter((item) => item.type === "saida").reduce((sum, item) => sum + Number(item.amount), 0);
+  const cardBreakdown = monthlyCardBreakdown(monthlyTransactions, data.cards, data.cardPayments || [], selectedMonth);
 
   return `
     <section class="content-grid">
       ${metric("Saldo em contas", money(accountBalance), icons.account, "green")}
       ${metric("Limite disponivel", money(creditAvailable), icons.card, "blue")}
       ${metric("Renda mensal", money(income), icons.income, "teal")}
-      ${metric("Saidas do mes", money(expenses), "-", "rose")}
+      ${expenseMetric(expenses, cardBreakdown, selectedMonth)}
       <section class="wide-panel">
         <div class="panel-title summary-title">
           <div>
@@ -256,6 +259,54 @@ function metric(title, value, icon, tone) {
   return `<article class="metric ${tone}"><div class="metric-icon">${icon}</div><span>${title}</span><strong>${value}</strong></article>`;
 }
 
+function expenseMetric(value, cardBreakdown, selectedMonth) {
+  return `
+    <article class="metric rose expense-metric ${state.expensePopoverOpen ? "is-open" : ""}" data-expense-card>
+      <button class="expense-metric-button" type="button" data-expense-popover-toggle aria-expanded="${state.expensePopoverOpen ? "true" : "false"}">
+        <div class="metric-icon">-</div>
+        <span>Saidas do mes</span>
+        <strong>${money(value)}</strong>
+      </button>
+      ${expensePopover(cardBreakdown, selectedMonth)}
+    </article>
+  `;
+}
+
+function expensePopover(cardBreakdown, selectedMonth) {
+  return `
+    <div class="expense-popover" data-expense-popover>
+      <div class="expense-popover-title">
+        <strong>Faturas do mes</strong>
+        <span>${escapeHtml(monthLabel(selectedMonth))}</span>
+      </div>
+      <div class="expense-popover-list">
+        ${cardBreakdown.length ? cardBreakdown.map(cardInvoiceRow).join("") : `<p class="empty-state">Nenhum lancamento em cartao neste mes.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function cardInvoiceRow(item) {
+  return `
+    <section class="card-invoice-row">
+      <div>
+        <strong>${escapeHtml(item.cardName)}</strong>
+        <span>${item.transactionCount} ${item.transactionCount === 1 ? "lancamento" : "lancamentos"}</span>
+      </div>
+      <div class="invoice-values">
+        <span>Total: <b>${money(item.total)}</b></span>
+        <span>Pago: <b>${money(item.paid)}</b></span>
+        <span>Pendente: <b>${money(item.pending)}</b></span>
+      </div>
+      <div class="invoice-actions">
+        <input data-card-payment-amount="${escapeAttribute(item.cardId)}" type="number" min="0" step="0.01" value="${escapeAttribute(item.pending.toFixed(2))}" aria-label="Valor da baixa parcial" />
+        <button type="button" data-card-payment="partial" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}">Baixa parcial</button>
+        <button type="button" data-card-payment="full" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}" data-amount="${escapeAttribute(item.pending.toFixed(2))}">Baixa total</button>
+      </div>
+    </section>
+  `;
+}
+
 function transactionRow(item, cards = []) {
   const sign = item.type === "entrada" ? "+" : "-";
   const tone = item.type === "entrada" ? "positive" : "negative";
@@ -267,6 +318,44 @@ function transactionRow(item, cards = []) {
       <b class="${tone}">${sign} ${money(item.amount)}</b>
     </div>
   `;
+}
+
+function monthlyCardBreakdown(transactions, cards, payments, month) {
+  const cardRows = new Map();
+
+  transactions
+    .filter((item) => item.type === "saida" && item.cardId)
+    .forEach((item) => {
+      if (!cardRows.has(item.cardId)) {
+        const card = cards.find((candidate) => candidate.id === item.cardId);
+        cardRows.set(item.cardId, {
+          cardId: item.cardId,
+          cardName: card?.name || "Cartao nao identificado",
+          month,
+          total: 0,
+          paid: 0,
+          pending: 0,
+          transactionCount: 0,
+        });
+      }
+
+      const row = cardRows.get(item.cardId);
+      row.total += Number(item.amount || 0);
+      row.transactionCount += 1;
+    });
+
+  payments
+    .filter((item) => item.month === month && cardRows.has(item.cardId))
+    .forEach((item) => {
+      cardRows.get(item.cardId).paid += Number(item.amount || 0);
+    });
+
+  return [...cardRows.values()]
+    .map((item) => ({
+      ...item,
+      pending: Math.max(item.total - item.paid, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
 }
 
 function accountsTemplate() {
@@ -843,6 +932,17 @@ function bindEvents() {
     state.summaryCardId = event.target.value || "";
     render();
   });
+  document.querySelector("[data-expense-popover-toggle]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    state.expensePopoverOpen = !state.expensePopoverOpen;
+    render();
+  });
+  document.querySelector("[data-expense-popover]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  document.querySelectorAll("[data-card-payment]").forEach((button) => {
+    button.addEventListener("click", () => addCardPayment(button));
+  });
   document.querySelector("[name='transactionSearch']")?.addEventListener("input", (event) => {
     state.transactionSearch = event.target.value;
     refreshTransactionHistory();
@@ -859,6 +959,12 @@ function bindEvents() {
       render();
     });
   });
+
+  document.addEventListener("click", () => {
+    if (!state.expensePopoverOpen) return;
+    state.expensePopoverOpen = false;
+    render();
+  }, { once: true });
 
   document.querySelectorAll("[data-settings-tab]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -895,6 +1001,29 @@ function bindEvents() {
   const transactionForm = document.getElementById("transaction-form");
   transactionForm?.addEventListener("submit", addTransaction);
   bindInstallmentControls(transactionForm);
+}
+
+async function addCardPayment(button) {
+  const cardId = button.dataset.cardId;
+  const month = button.dataset.month;
+  const type = button.dataset.cardPayment;
+  const amountInput = [...document.querySelectorAll("[data-card-payment-amount]")]
+    .find((input) => input.dataset.cardPaymentAmount === cardId);
+  const amount = type === "full" ? button.dataset.amount : amountInput?.value;
+
+  if (!cardId || !month || Number(amount || 0) <= 0) {
+    return;
+  }
+
+  await state.repository.addCardPayment({
+    cardId,
+    month,
+    amount,
+    paymentType: type === "full" ? "total" : "parcial",
+    date: today,
+  });
+  state.expensePopoverOpen = true;
+  await refreshDataWithBackup(`baixa-cartao-${type}`);
 }
 
 async function handleBackupAction(action, backupId = "") {

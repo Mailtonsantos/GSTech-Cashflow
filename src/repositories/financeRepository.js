@@ -74,6 +74,10 @@ function splitInstallments(total, installments) {
   return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
 }
 
+function monthFromDate(dateValue) {
+  return String(dateValue || today()).slice(0, 7);
+}
+
 function seedData(user) {
   return {
     bankAccounts: [
@@ -230,7 +234,7 @@ export class FinanceRepository {
   }
 
   async exportRawSnapshot() {
-    const [user, userDetails, brands, categories, paymentMethods, accounts, cards, incomes, transactions] = await Promise.all([
+    const [user, userDetails, brands, categories, paymentMethods, accounts, cards, cardPayments, incomes, transactions] = await Promise.all([
       LocalDatabaseService.get(this.db, stores.users, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.userDetails, this.user.id),
       LocalDatabaseService.getAll(this.db, stores.cardBrands),
@@ -238,6 +242,7 @@ export class FinanceRepository {
       LocalDatabaseService.getAll(this.db, stores.paymentMethods),
       LocalDatabaseService.getAllByUser(this.db, stores.bankAccounts, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.creditCards, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.cardPayments, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.incomes, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
     ]);
@@ -250,6 +255,7 @@ export class FinanceRepository {
       paymentMethods: paymentMethods.filter((item) => !item.user_id || item.user_id === this.user.id),
       accounts,
       cards,
+      cardPayments,
       incomes,
       transactions,
     };
@@ -273,6 +279,7 @@ export class FinanceRepository {
       this.replaceUserStore(stores.userDetails, snapshot.userDetails || []),
       this.replaceUserStore(stores.bankAccounts, snapshot.accounts || []),
       this.replaceUserStore(stores.creditCards, snapshot.cards || []),
+      this.replaceUserStore(stores.cardPayments, snapshot.cardPayments || []),
       this.replaceUserStore(stores.incomes, snapshot.incomes || []),
       this.replaceUserStore(stores.transactions, snapshot.transactions || []),
       this.replaceCatalogStore(stores.cardBrands, snapshot.brands || []),
@@ -369,9 +376,10 @@ export class FinanceRepository {
   }
 
   async getSnapshot() {
-    const [accounts, cards, incomes, transactions, brands, categories, paymentMethods, userDetails] = await Promise.all([
+    const [accounts, cards, cardPayments, incomes, transactions, brands, categories, paymentMethods, userDetails] = await Promise.all([
       LocalDatabaseService.getAllByUser(this.db, stores.bankAccounts, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.creditCards, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.cardPayments, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.incomes, this.user.id),
       LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
       LocalDatabaseService.getAll(this.db, stores.cardBrands),
@@ -423,6 +431,18 @@ export class FinanceRepository {
             note: item.observacao || "",
           };
         }),
+      cardPayments: cardPayments
+        .filter((item) => !item.excluido)
+        .map((item) => ({
+          id: item.id,
+          cardId: item.cartao_id,
+          month: item.mes_referencia,
+          amount: normalizeMoney(item.valor_pago),
+          paymentType: item.tipo_pagamento || "parcial",
+          date: item.data_pagamento || today(),
+          note: item.observacao || "",
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
       incomes: incomes
         .filter((item) => item.ativa)
         .map((item) => ({
@@ -535,6 +555,20 @@ export class FinanceRepository {
     const existing = await LocalDatabaseService.get(this.db, stores.creditCards, itemId);
     if (!existing) return;
     return LocalDatabaseService.put(this.db, stores.creditCards, { ...existing, ativo: 0, atualizado_em: now() });
+  }
+
+  async addCardPayment(form) {
+    return LocalDatabaseService.put(this.db, stores.cardPayments, {
+      ...baseRecord(this.user.id),
+      user_id: this.user.id,
+      cartao_id: form.cardId,
+      mes_referencia: form.month || monthFromDate(form.date),
+      tipo_pagamento: form.paymentType || "parcial",
+      valor_pago: normalizeMoney(form.amount),
+      data_pagamento: form.date || today(),
+      observacao: form.note || "",
+      excluido: 0,
+    });
   }
 
   creditCardRecord(form, existing = null) {
