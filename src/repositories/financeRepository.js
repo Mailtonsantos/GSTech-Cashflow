@@ -86,6 +86,16 @@ function creditInvoiceDate(purchaseDate, card) {
   return dateWithDay(invoiceMonthDate, dueDay);
 }
 
+function shouldRepairCreditInvoiceDate(dateValue, card) {
+  if (!dateValue || !card) {
+    return false;
+  }
+
+  const date = new Date(`${dateValue}T00:00:00`);
+  const dueDay = Math.max(1, parseInteger(card.dia_vencimento, date.getDate()));
+  return date.getDate() !== dueDay;
+}
+
 function splitInstallments(total, installments) {
   const cents = Math.round(normalizeMoney(total) * 100);
   const count = Math.max(1, parseInteger(installments, 1));
@@ -734,6 +744,38 @@ export class FinanceRepository {
     const existing = await LocalDatabaseService.get(this.db, stores.paymentMethods, itemId);
     if (!existing) return;
     return LocalDatabaseService.put(this.db, stores.paymentMethods, { ...existing, ativa: 0, atualizado_em: now() });
+  }
+
+  async repairCreditInvoiceDates() {
+    const [cards, transactions] = await Promise.all([
+      LocalDatabaseService.getAllByUser(this.db, stores.creditCards, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
+    ]);
+    const cardsById = new Map(cards.map((card) => [card.id, card]));
+    const repairs = transactions
+      .filter((item) => !item.excluida && item.tipo === "saida" && item.cartao_id)
+      .map((item) => {
+        const card = cardsById.get(item.cartao_id);
+        if (!shouldRepairCreditInvoiceDate(item.data_movimento, card)) {
+          return null;
+        }
+
+        const nextDate = creditInvoiceDate(item.data_movimento, card);
+        return nextDate !== item.data_movimento ? { item, nextDate } : null;
+      })
+      .filter(Boolean);
+
+    await Promise.all(
+      repairs.map(({ item, nextDate }) =>
+        LocalDatabaseService.put(this.db, stores.transactions, {
+          ...item,
+          data_movimento: nextDate,
+          atualizado_em: now(),
+        }),
+      ),
+    );
+
+    return repairs.length;
   }
 
   async addTransaction(form) {

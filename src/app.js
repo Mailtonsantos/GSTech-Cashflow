@@ -537,6 +537,7 @@ function backupTemplate() {
         ${state.backupMessage ? `<p class="backup-message">${escapeHtml(state.backupMessage)}</p>` : ""}
         <button class="primary-button" type="button" data-backup-action="create">${icons.plus} <span>Criar backup agora</span></button>
         <button class="ghost-button" type="button" data-backup-action="export-latest">Exportar ultimo backup</button>
+        <button class="ghost-button" type="button" data-backup-action="repair-invoice-dates">Corrigir datas de faturas antigas</button>
         <label class="file-button">Importar backup JSON
           <input name="backupFile" type="file" accept="application/json,.json" />
         </label>
@@ -1036,6 +1037,17 @@ async function handleBackupAction(action, backupId = "") {
   if (action === "export-latest") {
     const backup = state.backups[0] || await createBackup("manual");
     BackupService.downloadBackup(backup);
+    return;
+  }
+
+  if (action === "repair-invoice-dates") {
+    const ok = confirm("Corrigir datas antigas de lancamentos em cartao? Um backup sera criado antes da correcao.");
+    if (!ok) return;
+
+    await createBackup("antes-correcao-faturas");
+    const repaired = await state.repository.repairCreditInvoiceDates();
+    state.backupMessage = `${repaired} ${repaired === 1 ? "lancamento corrigido" : "lancamentos corrigidos"} pela regra de fechamento do cartao.`;
+    await refreshData();
     return;
   }
 
