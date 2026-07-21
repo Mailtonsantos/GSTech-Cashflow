@@ -468,6 +468,12 @@ textarea {
   background: #f8fbfa;
 }
 
+.card-invoice-row.is-paid,
+.table-row.is-paid,
+.item-card.is-paid {
+  background: #f7faf8;
+}
+
 .card-invoice-row > div:first-child {
   display: flex;
   justify-content: space-between;
@@ -500,6 +506,13 @@ textarea {
   font-size: 0.82rem;
   font-weight: 800;
   padding: 7px 10px;
+}
+
+.invoice-actions input:disabled,
+.invoice-actions button:disabled,
+.item-card .card-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .wide-panel {
@@ -634,6 +647,32 @@ textarea {
 .item-card small {
   color: #66736f;
   line-height: 1.45;
+}
+
+.payment-badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.payment-badge.open {
+  background: #f2f6f4;
+  color: #52625e;
+}
+
+.payment-badge.partial {
+  background: #fff7df;
+  color: #946200;
+}
+
+.payment-badge.paid {
+  background: #dcf7e7;
+  color: #0f7a45;
 }
 
 .item-card .card-actions {

@@ -109,6 +109,51 @@ function monthFromDate(dateValue) {
   return String(dateValue || today()).slice(0, 7);
 }
 
+function comparePaymentAllocationOrder(a, b) {
+  return (
+    String(a.data_movimento || "").localeCompare(String(b.data_movimento || "")) ||
+    String(a.id_agrupador_parcela || a.descricao || a.id).localeCompare(String(b.id_agrupador_parcela || b.descricao || b.id)) ||
+    Number(a.parcela_atual || 1) - Number(b.parcela_atual || 1)
+  );
+}
+
+function paymentAllocationFor(transactions, payments) {
+  const paymentsByCardMonth = new Map();
+  payments
+    .filter((item) => !item.excluido)
+    .forEach((item) => {
+      const key = `${item.cartao_id || ""}|${item.mes_referencia || ""}`;
+      paymentsByCardMonth.set(key, (paymentsByCardMonth.get(key) || 0) + normalizeMoney(item.valor_pago));
+    });
+
+  const transactionsByCardMonth = new Map();
+  transactions
+    .filter((item) => !item.excluida && item.tipo === "saida" && item.cartao_id)
+    .forEach((item) => {
+      const key = `${item.cartao_id}|${monthFromDate(item.data_movimento)}`;
+      if (!transactionsByCardMonth.has(key)) {
+        transactionsByCardMonth.set(key, []);
+      }
+      transactionsByCardMonth.get(key).push(item);
+    });
+
+  const allocation = new Map();
+  transactionsByCardMonth.forEach((items, key) => {
+    let remaining = paymentsByCardMonth.get(key) || 0;
+    items.sort(comparePaymentAllocationOrder).forEach((item) => {
+      const amount = normalizeMoney(item.valor);
+      const paid = Math.max(0, Math.min(amount, remaining));
+      remaining = Math.max(0, remaining - paid);
+      allocation.set(item.id, {
+        paidAmount: paid,
+        paymentStatus: paid >= amount && amount > 0 ? "pago" : paid > 0 ? "parcial" : "aberto",
+      });
+    });
+  });
+
+  return allocation;
+}
+
 function seedData(user) {
   return {
     bankAccounts: [
@@ -420,6 +465,7 @@ export class FinanceRepository {
     ]);
 
     const activeTransactions = transactions.filter((item) => !item.excluida);
+    const paymentAllocation = paymentAllocationFor(activeTransactions, cardPayments);
 
     return {
       userDetails: userDetails[0] || null,
@@ -490,11 +536,18 @@ export class FinanceRepository {
         .map((item) => {
           const totalInstallments = Number(item.total_parcelas || 1);
           const paymentTarget = inferPaymentTarget(item);
+          const payment = paymentAllocation.get(item.id) || {
+            paidAmount: normalizeMoney(item.valor_pago),
+            paymentStatus: item.status_pagamento || "aberto",
+          };
           return {
             id: item.id,
             description: item.descricao,
             type: item.tipo,
             amount: normalizeMoney(item.valor),
+            paidAmount: normalizeMoney(payment.paidAmount),
+            pendingAmount: Math.max(normalizeMoney(item.valor) - normalizeMoney(payment.paidAmount), 0),
+            paymentStatus: payment.paymentStatus || "aberto",
             category: item.categoria || "",
             categoryId: item.categoria_id || "",
             date: item.data_movimento,
@@ -589,7 +642,7 @@ export class FinanceRepository {
   }
 
   async addCardPayment(form) {
-    return LocalDatabaseService.put(this.db, stores.cardPayments, {
+    const payment = await LocalDatabaseService.put(this.db, stores.cardPayments, {
       ...baseRecord(this.user.id),
       user_id: this.user.id,
       cartao_id: form.cardId,
@@ -600,6 +653,8 @@ export class FinanceRepository {
       observacao: form.note || "",
       excluido: 0,
     });
+    await this.syncCardPaymentStatus(form.cardId, form.month || monthFromDate(form.date));
+    return payment;
   }
 
   creditCardRecord(form, existing = null) {
@@ -778,6 +833,36 @@ export class FinanceRepository {
     return repairs.length;
   }
 
+  async syncCardPaymentStatus(cardId, month) {
+    if (!cardId || !month) {
+      return 0;
+    }
+
+    const [transactions, payments] = await Promise.all([
+      LocalDatabaseService.getAllByUser(this.db, stores.transactions, this.user.id),
+      LocalDatabaseService.getAllByUser(this.db, stores.cardPayments, this.user.id),
+    ]);
+    const allocation = paymentAllocationFor(transactions, payments);
+    const targetTransactions = transactions.filter(
+      (item) => !item.excluida && item.tipo === "saida" && item.cartao_id === cardId && monthFromDate(item.data_movimento) === month,
+    );
+
+    await Promise.all(
+      targetTransactions.map((item) => {
+        const payment = allocation.get(item.id) || { paidAmount: 0, paymentStatus: "aberto" };
+        return LocalDatabaseService.put(this.db, stores.transactions, {
+          ...item,
+          valor_pago: normalizeMoney(payment.paidAmount),
+          status_pagamento: payment.paymentStatus,
+          pago_em: payment.paymentStatus === "pago" ? today() : item.pago_em || null,
+          atualizado_em: now(),
+        });
+      }),
+    );
+
+    return targetTransactions.length;
+  }
+
   async addTransaction(form) {
     const paymentMode = form.paymentTarget === "cartao" ? form.paymentMode : "";
     const totalInstallments = normalizeInstallments(form.paymentTarget, paymentMode, form.installments);
@@ -826,6 +911,7 @@ export class FinanceRepository {
   async updateTransaction(itemId, form) {
     const existing = await LocalDatabaseService.get(this.db, stores.transactions, itemId);
     if (!existing) return null;
+    if (existing.status_pagamento === "pago") return existing;
     return LocalDatabaseService.put(this.db, stores.transactions, {
       ...existing,
       ...this.transactionRecord(form, existing),
@@ -838,6 +924,7 @@ export class FinanceRepository {
   async deleteTransaction(itemId) {
     const existing = await LocalDatabaseService.get(this.db, stores.transactions, itemId);
     if (!existing) return;
+    if (existing.status_pagamento === "pago") return existing;
     return LocalDatabaseService.put(this.db, stores.transactions, { ...existing, excluida: 1, atualizado_em: now() });
   }
 
@@ -866,6 +953,9 @@ export class FinanceRepository {
       total_parcelas: totalInstallments,
       id_agrupador_parcela: installment?.groupId || form.installmentGroupId || existing?.id_agrupador_parcela || null,
       observacao: form.note || "",
+      valor_pago: existing?.valor_pago || 0,
+      status_pagamento: existing?.status_pagamento || "aberto",
+      pago_em: existing?.pago_em || null,
       excluida: 0,
     };
   }

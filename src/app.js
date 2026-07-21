@@ -220,7 +220,9 @@ function summaryTemplate() {
   const accountBalance = data.accounts.reduce((sum, item) => sum + Number(item.balance), 0);
   const creditAvailable = data.cards.reduce((sum, item) => sum + Math.max(Number(item.limit) - Number(item.used), 0), 0);
   const income = data.incomes.reduce((sum, item) => sum + Number(item.amount), 0);
-  const expenses = monthlyTransactions.filter((item) => item.type === "saida").reduce((sum, item) => sum + Number(item.amount), 0);
+  const expenses = monthlyTransactions
+    .filter((item) => item.type === "saida")
+    .reduce((sum, item) => sum + transactionPendingValue(item), 0);
   const cardBreakdown = monthlyCardBreakdown(monthlyTransactions, data.cards, data.cardPayments || [], selectedMonth);
 
   return `
@@ -287,8 +289,9 @@ function expensePopover(cardBreakdown, selectedMonth) {
 }
 
 function cardInvoiceRow(item) {
+  const settled = item.pending <= 0;
   return `
-    <section class="card-invoice-row">
+    <section class="card-invoice-row ${settled ? "is-paid" : ""}">
       <div>
         <strong>${escapeHtml(item.cardName)}</strong>
         <span>${item.transactionCount} ${item.transactionCount === 1 ? "lancamento" : "lancamentos"}</span>
@@ -299,9 +302,9 @@ function cardInvoiceRow(item) {
         <span>Pendente: <b>${money(item.pending)}</b></span>
       </div>
       <div class="invoice-actions">
-        <input data-card-payment-amount="${escapeAttribute(item.cardId)}" type="number" min="0" step="0.01" value="${escapeAttribute(item.pending.toFixed(2))}" aria-label="Valor da baixa parcial" />
-        <button type="button" data-card-payment="partial" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}">Baixa parcial</button>
-        <button type="button" data-card-payment="full" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}" data-amount="${escapeAttribute(item.pending.toFixed(2))}">Baixa total</button>
+        <input data-card-payment-amount="${escapeAttribute(item.cardId)}" type="number" min="0" step="0.01" value="${escapeAttribute(item.pending.toFixed(2))}" aria-label="Valor da baixa parcial" ${settled ? "disabled" : ""} />
+        <button type="button" data-card-payment="partial" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}" data-amount="${escapeAttribute(item.pending.toFixed(2))}" ${settled ? "disabled" : ""}>Baixa parcial</button>
+        <button type="button" data-card-payment="full" data-card-id="${escapeAttribute(item.cardId)}" data-month="${escapeAttribute(item.month)}" data-amount="${escapeAttribute(item.pending.toFixed(2))}" ${settled ? "disabled" : ""}>Baixa total</button>
       </div>
     </section>
   `;
@@ -311,10 +314,17 @@ function transactionRow(item, cards = []) {
   const sign = item.type === "entrada" ? "+" : "-";
   const tone = item.type === "entrada" ? "positive" : "negative";
   const card = item.cardId ? cards.find((candidate) => candidate.id === item.cardId) : null;
-  const meta = [item.category || "Sem categoria", formatDate(item.date), card ? `Cartao: ${card.name}` : ""].filter(Boolean).join(" - ");
+  const meta = [item.category || "Sem categoria", formatDate(item.date), card ? `Cartao: ${card.name}` : "", paymentStatusLabel(item)]
+    .filter(Boolean)
+    .join(" - ");
+  const paidInfo = item.paymentStatus === "pago"
+    ? `<span class="payment-badge paid">Pago</span>`
+    : item.paymentStatus === "parcial"
+      ? `<span class="payment-badge partial">Parcial: ${money(item.paidAmount)} pago</span>`
+      : "";
   return `
-    <div class="table-row">
-      <div><strong>${escapeHtml(item.description)}</strong><span>${escapeHtml(meta)}</span></div>
+    <div class="table-row ${item.paymentStatus === "pago" ? "is-paid" : ""}">
+      <div><strong>${escapeHtml(item.description)}</strong><span>${escapeHtml(meta)}</span>${paidInfo}</div>
       <b class="${tone}">${sign} ${money(item.amount)}</b>
     </div>
   `;
@@ -341,13 +351,8 @@ function monthlyCardBreakdown(transactions, cards, payments, month) {
 
       const row = cardRows.get(item.cardId);
       row.total += Number(item.amount || 0);
+      row.paid += Number(item.paidAmount || 0);
       row.transactionCount += 1;
-    });
-
-  payments
-    .filter((item) => item.month === month && cardRows.has(item.cardId))
-    .forEach((item) => {
-      cardRows.get(item.cardId).paid += Number(item.amount || 0);
     });
 
   return [...cardRows.values()]
@@ -687,9 +692,19 @@ function monthlyTransactionHistory(transactions) {
             <strong>${escapeHtml(monthLabel(key))}</strong>
             <span>${items.length} ${items.length === 1 ? "lancamento" : "lancamentos"}</span>
           </div>
-          ${items.map((item) =>
-            itemCard("transactions", item.id, item.description, `${item.category || "Sem categoria"} - ${formatDate(item.date)}`, `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`, transactionDetail(item), item.note)
-          ).join("")}
+          ${items.map((item) => {
+            const locked = item.paymentStatus === "pago";
+            return itemCard(
+              "transactions",
+              item.id,
+              item.description,
+              `${item.category || "Sem categoria"} - ${formatDate(item.date)} - ${paymentStatusLabel(item)}`,
+              `${item.type === "entrada" ? "+" : "-"} ${money(item.amount)}`,
+              transactionDetail(item),
+              item.note,
+              { locked, status: item.paymentStatus, paidAmount: item.paidAmount },
+            );
+          }).join("")}
           <div class="month-subtotal">
             <span>Sub. Total:</span>
             <strong>${money(subtotal)}</strong>
@@ -804,18 +819,21 @@ function editingItem(kind) {
   return id ? state.data[kind].find((item) => item.id === id) : null;
 }
 
-function itemCard(kind, id, title, meta, value, detail, note = "") {
+function itemCard(kind, id, title, meta, value, detail, note = "", options = {}) {
+  const locked = Boolean(options.locked);
+  const status = options.status ? paymentStatusBadge(options.status, options.paidAmount) : "";
   return `
-    <article class="item-card">
+    <article class="item-card ${locked ? "is-paid" : ""}">
       <div>
         <strong>${escapeHtml(title)}</strong>
         <span>${escapeHtml(meta)}</span>
+        ${status}
         ${note ? `<small>${escapeHtml(note)}</small>` : ""}
       </div>
       <div class="item-value">
         <b>${escapeHtml(value)}</b>
         <span>${escapeHtml(detail)}</span>
-        ${actionButtons(kind, id)}
+        ${actionButtons(kind, id, locked)}
       </div>
     </article>
   `;
@@ -833,13 +851,13 @@ function catalogCard(kind, id, title, meta, note = "", isCustom = false) {
   `;
 }
 
-function actionButtons(kind, id) {
+function actionButtons(kind, id, disabled = false) {
   return `
     <div class="card-actions flex flex-row items-center gap-2" aria-label="Acoes do cadastro">
-      <button class="icon-action" type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="Editar" aria-label="Editar">
+      <button class="icon-action" type="button" data-action="edit" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="${disabled ? "Lancamento pago" : "Editar"}" aria-label="Editar" ${disabled ? "disabled" : ""}>
         <span aria-hidden="true">✎</span>
       </button>
-      <button class="icon-action danger" type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="Excluir" aria-label="Excluir">
+      <button class="icon-action danger" type="button" data-action="delete" data-kind="${kind}" data-id="${escapeAttribute(id)}" title="${disabled ? "Lancamento pago" : "Excluir"}" aria-label="Excluir" ${disabled ? "disabled" : ""}>
         <span aria-hidden="true">🗑</span>
       </button>
     </div>
@@ -903,19 +921,43 @@ function paymentMethodBehavior(id) {
 }
 
 function transactionDetail(item) {
+  const paymentLabel = paymentStatusLabel(item);
   if (Number(item.totalInstallments || 1) > 1) {
-    return `Parcela ${item.currentInstallment}/${item.totalInstallments}`;
+    return `Parcela ${item.currentInstallment}/${item.totalInstallments} | ${paymentLabel}`;
   }
 
   if (item.paymentMode === "avista") {
-    return item.type === "entrada" ? "Entrada a vista" : "Saida a vista";
+    return `${item.type === "entrada" ? "Entrada a vista" : "Saida a vista"} | ${paymentLabel}`;
   }
 
   if (item.paymentMode === "parcelado") {
-    return "Parcelado";
+    return `Parcelado | ${paymentLabel}`;
   }
 
-  return item.type === "entrada" ? "Entrada" : "Saida";
+  return `${item.type === "entrada" ? "Entrada" : "Saida"} | ${paymentLabel}`;
+}
+
+function transactionPendingValue(item) {
+  if (item.type !== "saida") return 0;
+  return Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
+}
+
+function paymentStatusLabel(item) {
+  if (item.paymentStatus === "pago") return "Pago";
+  if (item.paymentStatus === "parcial") return `Parcial (${money(item.paidAmount)} pago)`;
+  return "Aberto";
+}
+
+function paymentStatusBadge(status, paidAmount = 0) {
+  if (status === "pago") {
+    return `<span class="payment-badge paid">Pago</span>`;
+  }
+
+  if (status === "parcial") {
+    return `<span class="payment-badge partial">Parcial: ${money(paidAmount)} pago</span>`;
+  }
+
+  return `<span class="payment-badge open">Aberto</span>`;
 }
 
 function bindEvents() {
@@ -1010,7 +1052,9 @@ async function addCardPayment(button) {
   const type = button.dataset.cardPayment;
   const amountInput = [...document.querySelectorAll("[data-card-payment-amount]")]
     .find((input) => input.dataset.cardPaymentAmount === cardId);
-  const amount = type === "full" ? button.dataset.amount : amountInput?.value;
+  const pending = Number(button.dataset.amount || 0);
+  const requestedAmount = Number(type === "full" ? button.dataset.amount : amountInput?.value);
+  const amount = Math.min(requestedAmount, pending);
 
   if (!cardId || !month || Number(amount || 0) <= 0) {
     return;
