@@ -905,42 +905,45 @@ textarea {
   font-size: 1rem;
 }
 
-@media (max-width: 1060px) {
-  .content-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 840px) {
-  .auth-page {
-    grid-template-columns: 1fr;
-    align-items: start;
-    padding: 24px;
-  }
-
+@media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     height: auto;
     border-right: 0;
     border-bottom: 1px solid #dde7e3;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .logo {
+    padding: 0;
+    font-size: 0.98rem;
+  }
+
+  .logo-image {
+    width: 30px;
+    height: 30px;
   }
 
   .sidebar nav {
-    grid-template-columns: repeat(6, minmax(58px, 1fr));
+    display: flex;
+    gap: 6px;
     overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
   }
 
   .sidebar nav button {
-    justify-content: center;
-    min-width: 58px;
-  }
-
-  .sidebar nav button span {
-    display: none;
+    min-width: max-content;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.88rem;
   }
 
   .logout {
@@ -948,7 +951,31 @@ textarea {
   }
 
   .workspace {
-    padding: 16px;
+    padding: 18px;
+  }
+
+  .topbar {
+    margin-bottom: 18px;
+  }
+
+  .topbar h2 {
+    font-size: 1.65rem;
+  }
+
+  .metric,
+  .expense-metric-button {
+    min-height: 124px;
+  }
+
+  .metric strong {
+    font-size: 1.35rem;
+  }
+
+  .content-grid,
+  .two-column,
+  .settings-section,
+  .backup-page {
+    gap: 12px;
   }
 
   .two-column,
@@ -957,11 +984,98 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .entry-panel,
+  .list-panel,
+  .two-column .entry-panel:has(.form-grid) {
+    max-width: none;
+  }
+
+  .transaction-layout {
+    height: auto;
+    overflow: visible;
+  }
+
+  .transaction-layout .entry-panel,
+  .transaction-layout .list-panel {
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 1060px) {
+  .content-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 24px;
+  }
+
+}
+
+@media (max-width: 720px) {
+  body {
+    font-size: 14px;
+  }
+
+  .sidebar {
+    padding: 8px 10px;
+  }
+
+  .logo strong {
+    font-size: 0.92rem;
+  }
+
+  .sidebar nav button {
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 0.82rem;
+  }
+
+  .workspace {
+    padding: 12px;
+  }
+
+  .topbar {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .eyebrow {
+    font-size: 0.72rem;
+  }
+
+  .topbar h2 {
+    font-size: 1.45rem;
+  }
+
+  .user-chip {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
+
   .content-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .metric,
+  .expense-metric-button {
+    min-height: 104px;
+    padding: 14px;
+  }
+
+  .metric-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .metric strong {
+    font-size: 1.25rem;
   }
 
   .expense-popover {
@@ -979,6 +1093,32 @@ textarea {
 
   .auth-brand h1 {
     font-size: 3rem;
+  }
+
+  .entry-panel,
+  .list-panel,
+  .wide-panel {
+    padding: 12px;
+    box-shadow: 0 10px 24px rgba(21, 34, 31, 0.08);
+  }
+
+  .panel-title h3 {
+    font-size: 1rem;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 0.82rem;
+    padding: 6px 10px;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .google-button,
+  .logout,
+  .sidebar nav button {
+    min-height: 34px;
   }
 
   .topbar,
@@ -1014,16 +1154,5 @@ textarea {
 
   .card-actions {
     justify-content: flex-start;
-  }
-
-  .transaction-layout {
-    height: auto;
-    overflow: visible;
-  }
-
-  .transaction-layout .entry-panel,
-  .transaction-layout .list-panel {
-    max-height: none;
-    overflow-y: visible;
   }
 }
