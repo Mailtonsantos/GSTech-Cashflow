@@ -3,6 +3,7 @@ setlocal
 
 set "APP_DIR=%~dp0"
 set "PORT=5173"
+set "HOST=0.0.0.0"
 set "URL=http://127.0.0.1:%PORT%/index.html"
 set "NODE_EXE=C:\Users\mailton.santos\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
 
@@ -26,7 +27,14 @@ if exist "%NODE_EXE%" (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$port=%PORT%; $active=Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if ($active) { exit 0 } else { exit 2 }"
+  "$port=%PORT%; $active=Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; $lan=$active | Where-Object { $_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::' }; if ($lan) { exit 0 } elseif ($active) { exit 3 } else { exit 2 }"
+
+if errorlevel 3 (
+  echo A porta %PORT% ja esta em uso, mas nao esta liberada para a rede local.
+  echo Feche a janela antiga do servidor GSTec Cashflow e execute este BAT novamente.
+  pause
+  exit /b 1
+)
 
 if errorlevel 2 (
   echo Iniciando GSTec Cashflow em %URL% ...
@@ -48,5 +56,13 @@ if errorlevel 1 (
 
 echo Abrindo %URL% ...
 start "" "%URL%"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$ip=(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.InterfaceAlias -notlike 'vEthernet*' } | Select-Object -First 1 -ExpandProperty IPAddress); if ($ip) { $ip }"`) do set "LAN_IP=%%I"
+if defined LAN_IP (
+  echo.
+  echo Acesso pelo computador: %URL%
+  echo Acesso pelo celular na mesma rede: http://%LAN_IP%:%PORT%/index.html
+  echo.
+  echo Se o celular nao abrir, libere a porta %PORT% no Firewall do Windows para rede privada.
+)
 echo Servidor ativo. Pode fechar esta janela.
 endlocal

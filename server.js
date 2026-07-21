@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
 const port = Number(process.env.PORT || 5173);
+const host = process.env.HOST || "0.0.0.0";
 const root = process.cwd();
 
 const types = {
@@ -41,6 +42,7 @@ createServer(async (request, response) => {
     response.writeHead(200, { "Content-Type": types[".html"], ...noCacheHeaders });
     response.end(content);
   }
-}).listen(port, "127.0.0.1", () => {
-  console.log(`GSTec Cashflow rodando em http://127.0.0.1:${port}`);
+}).listen(port, host, () => {
+  console.log(`GSTec Cashflow rodando localmente em http://127.0.0.1:${port}`);
+  console.log(`Para acessar por outro dispositivo, use o IP do computador na rede na porta ${port}.`);
 });
