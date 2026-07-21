@@ -362,13 +362,22 @@ textarea {
 
 .metric {
   position: relative;
-  min-height: 150px;
-  padding: 18px;
+  min-height: 132px;
+  padding: 18px 18px 16px;
   border-radius: 8px;
   background: #ffffff;
   border: 1px solid #dde7e3;
+  border-left: 5px solid #0f766e;
+  box-shadow: 0 14px 30px rgba(21, 34, 31, 0.08);
   display: grid;
-  align-content: space-between;
+  gap: 10px;
+}
+
+.metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .metric-icon {
@@ -387,10 +396,33 @@ textarea {
 
 .metric strong {
   display: block;
-  margin-top: 8px;
   font-size: 1.55rem;
 }
 
+.metric small {
+  color: #66736f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.metric-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf3f0;
+}
+
+.metric-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2ac6c4;
+}
+
+.metric.green { border-left-color: #2bb673; }
+.metric.blue { border-left-color: #3e7be6; }
+.metric.teal { border-left-color: #2ac6c4; }
+.metric.rose { border-left-color: #efb3b1; }
 .metric.green .metric-icon { background: #e5f7ee; color: #13844e; }
 .metric.blue .metric-icon { background: #e8f0ff; color: #285bbf; }
 .metric.teal .metric-icon { background: #e4f6f4; color: #0f766e; }
@@ -402,17 +434,21 @@ textarea {
 
 .expense-metric-button {
   width: 100%;
-  min-height: 150px;
-  padding: 18px;
+  min-height: 132px;
+  padding: 18px 18px 16px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   display: grid;
-  align-content: space-between;
+  gap: 10px;
   justify-items: start;
   text-align: left;
+}
+
+.expense-metric-button .metric-icon {
+  justify-self: end;
 }
 
 .expense-popover {
@@ -811,6 +847,35 @@ textarea {
   grid-template-columns: minmax(300px, 448px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.create-action {
+  align-self: start;
+  padding: 14px;
+  border: 1px solid #dde7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(21, 34, 31, 0.08);
+}
+
+.create-action .primary-button {
+  width: 100%;
+}
+
+.form-window {
+  animation: form-window-in 0.16s ease-out;
+}
+
+@keyframes form-window-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .transaction-layout {

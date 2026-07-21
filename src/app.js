@@ -34,6 +34,7 @@ const state = {
   transactionCardId: "",
   transactionSearch: "",
   transactionSort: "parcel",
+  openForm: "",
   backups: [],
   backupMessage: "",
   loading: true,
@@ -117,6 +118,7 @@ function logout() {
   state.transactionCardId = "";
   state.transactionSearch = "";
   state.transactionSort = "parcel";
+  state.openForm = "";
   state.backups = [];
   state.backupMessage = "";
   state.editing = {};
@@ -223,6 +225,9 @@ function summaryTemplate() {
   const selectedCard = data.cards.find((card) => card.id === selectedCardId);
   const accountBalance = data.accounts.reduce((sum, item) => sum + Number(item.balance), 0);
   const creditAvailable = data.cards.reduce((sum, item) => sum + Math.max(Number(item.limit) - Number(item.used), 0), 0);
+  const creditLimit = data.cards.reduce((sum, item) => sum + Number(item.limit || 0), 0);
+  const creditUsed = Math.max(creditLimit - creditAvailable, 0);
+  const creditProgress = creditLimit > 0 ? Math.min(100, Math.round((creditUsed / creditLimit) * 100)) : 0;
   const income = data.incomes.reduce((sum, item) => sum + Number(item.amount), 0);
   const expenses = monthlyTransactions
     .filter((item) => item.type === "saida")
@@ -232,7 +237,10 @@ function summaryTemplate() {
   return `
     <section class="content-grid">
       ${metric("Saldo em contas", money(accountBalance), icons.account, "green")}
-      ${metric("Limite disponivel", money(creditAvailable), icons.card, "blue")}
+      ${metric("Limite disponivel", money(creditAvailable), icons.card, "blue", {
+        progress: creditProgress,
+        progressText: `${creditProgress}% utilizado`,
+      })}
       ${metric("Renda mensal", money(income), icons.income, "teal")}
       ${expenseMetric(expenses, cardBreakdown, selectedMonth)}
       <section class="wide-panel">
@@ -254,23 +262,34 @@ function summaryTemplate() {
           </div>
         </div>
         <div class="table-list">
-          ${monthlyTransactions.length ? monthlyTransactions.map((item) => transactionRow(item, data.cards)).join("") : `<p class="empty-state">Nenhuma movimentacao neste filtro.</p>`}
+          ${selectedCardId
+            ? monthlyTransactions.length
+              ? monthlyTransactions.map((item) => transactionRow(item, data.cards)).join("")
+              : `<p class="empty-state">Nenhuma movimentacao neste filtro.</p>`
+            : `<p class="empty-state">Escolha um cartao para exibir as movimentacoes do mes.</p>`}
         </div>
       </section>
     </section>
   `;
 }
 
-function metric(title, value, icon, tone) {
-  return `<article class="metric ${tone}"><div class="metric-icon">${icon}</div><span>${title}</span><strong>${value}</strong></article>`;
+function metric(title, value, icon, tone, options = {}) {
+  const progress = Number(options.progress || 0);
+  const hasProgress = options.progress !== undefined;
+  return `
+    <article class="metric ${tone}">
+      <div class="metric-top"><span>${title}</span><div class="metric-icon">${icon}</div></div>
+      <strong>${value}</strong>
+      ${hasProgress ? `<div class="metric-progress" aria-label="${escapeAttribute(options.progressText || "Progresso")}"><span style="width: ${progress}%"></span></div><small>${escapeHtml(options.progressText || `${progress}%`)}</small>` : ""}
+    </article>
+  `;
 }
 
 function expenseMetric(value, cardBreakdown, selectedMonth) {
   return `
     <article class="metric rose expense-metric ${state.expensePopoverOpen ? "is-open" : ""}" data-expense-card>
       <button class="expense-metric-button" type="button" data-expense-popover-toggle aria-expanded="${state.expensePopoverOpen ? "true" : "false"}">
-        <div class="metric-icon">-</div>
-        <span>Saidas do mes</span>
+        <div class="metric-top"><span>Saidas do mes</span><div class="metric-icon">-</div></div>
         <strong>${money(value)}</strong>
       </button>
       ${expensePopover(cardBreakdown, selectedMonth)}
@@ -582,14 +601,18 @@ function backupCard(item) {
 }
 
 function settingsSectionTemplate(formId, formTitle, fields, buttonLabel, editing, listTitle, listContent) {
+  const showForm = editing || state.openForm === formId;
   return `
     <section class="settings-section">
-      <form class="entry-panel" id="${formId}">
+      <div class="create-action ${showForm ? "is-hidden" : ""}">
+        <button class="primary-button" type="button" data-open-form="${formId}">${icons.plus} <span>${formTitle}</span></button>
+      </div>
+      <form class="entry-panel form-window ${showForm ? "" : "is-hidden"}" id="${formId}">
         <div class="panel-title"><h3>${formTitle}</h3></div>
         ${fields}
         <div class="button-row">
           <button class="primary-button" type="submit">${icons.plus} <span>${buttonLabel}</span></button>
-          ${editing ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+          <button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>
         </div>
       </form>
       <section class="list-panel">
@@ -672,14 +695,18 @@ function transactionsTemplate() {
 }
 
 function twoColumnTemplate(formId, formTitle, fields, listTitle, listContent, editing = null, layoutClass = "", listControls = "") {
+  const showForm = editing || state.openForm === formId;
   return `
     <section class="two-column ${layoutClass}">
-      <form class="entry-panel" id="${formId}">
+      <div class="create-action ${showForm ? "is-hidden" : ""}">
+        <button class="primary-button" type="button" data-open-form="${formId}">${icons.plus} <span>${formTitle}</span></button>
+      </div>
+      <form class="entry-panel form-window ${showForm ? "" : "is-hidden"}" id="${formId}">
         <div class="panel-title"><h3>${formTitle}</h3></div>
         ${fields}
         <div class="button-row">
           <button class="primary-button" type="submit">${icons.plus} <span>${editing ? "Salvar alteracoes" : "Adicionar"}</span></button>
-          ${editing ? `<button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>` : ""}
+          <button class="ghost-button" type="button" data-action="cancel-edit">Cancelar</button>
         </div>
       </form>
       <section class="list-panel">
@@ -937,6 +964,18 @@ function paymentMethodBehavior(id) {
   return paymentMethodById(id)?.comportamento || "";
 }
 
+function formIdByKind(kind) {
+  return {
+    accounts: "account-form",
+    cards: "card-form",
+    incomes: "income-form",
+    transactions: "transaction-form",
+    categories: "category-form",
+    brands: "brand-form",
+    paymentMethods: "payment-method-form",
+  }[kind] || "";
+}
+
 function transactionDetail(item) {
   const paymentLabel = paymentStatusLabel(item);
   if (Number(item.totalInstallments || 1) > 1) {
@@ -1024,6 +1063,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.view = button.dataset.view;
       state.editing = {};
+      state.openForm = "";
       render();
     });
   });
@@ -1038,18 +1078,28 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.settingsTab = button.dataset.settingsTab;
       state.editing = {};
+      state.openForm = "";
       render();
     });
   });
 
   document.getElementById("logout")?.addEventListener("click", logout);
+  document.querySelectorAll("[data-open-form]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editing = {};
+      state.openForm = button.dataset.openForm;
+      render();
+    });
+  });
   document.querySelector("[data-action='cancel-edit']")?.addEventListener("click", () => {
     state.editing = {};
+    state.openForm = "";
     render();
   });
   document.querySelectorAll("[data-action='edit']").forEach((button) => {
     button.addEventListener("click", () => {
       state.editing = { [button.dataset.kind]: button.dataset.id };
+      state.openForm = formIdByKind(button.dataset.kind);
       render();
     });
   });
@@ -1271,6 +1321,7 @@ async function addAccount(event) {
     await state.repository.addBankAccount(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("conta");
 }
 
@@ -1283,6 +1334,7 @@ async function addCard(event) {
     await state.repository.addCreditCard(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("cartao");
 }
 
@@ -1295,6 +1347,7 @@ async function addIncome(event) {
     await state.repository.addIncome(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("renda");
 }
 
@@ -1315,6 +1368,7 @@ async function addTransaction(event) {
     await state.repository.addTransaction(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("movimentacao");
 }
 
@@ -1327,6 +1381,7 @@ async function addCategory(event) {
     await state.repository.addCategory(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("categoria");
 }
 
@@ -1339,6 +1394,7 @@ async function addBrand(event) {
     await state.repository.addBrand(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("bandeira");
 }
 
@@ -1351,6 +1407,7 @@ async function addPaymentMethod(event) {
     await state.repository.addPaymentMethod(values);
   }
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup("forma-pagamento");
 }
 
@@ -1368,6 +1425,7 @@ async function deleteItem(kind, id) {
 
   await actions[kind]?.();
   state.editing = {};
+  state.openForm = "";
   await refreshDataWithBackup(`exclusao-${kind}`);
 }
 
