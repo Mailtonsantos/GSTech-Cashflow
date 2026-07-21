@@ -30,6 +30,8 @@ const state = {
   summaryMonth: today.slice(0, 7),
   summaryCardId: "",
   expensePopoverOpen: false,
+  transactionMonth: today.slice(0, 7),
+  transactionCardId: "",
   transactionSearch: "",
   transactionSort: "parcel",
   backups: [],
@@ -111,6 +113,8 @@ function logout() {
   state.summaryMonth = today.slice(0, 7);
   state.summaryCardId = "";
   state.expensePopoverOpen = false;
+  state.transactionMonth = today.slice(0, 7);
+  state.transactionCardId = "";
   state.transactionSearch = "";
   state.transactionSort = "parcel";
   state.backups = [];
@@ -607,6 +611,15 @@ function transactionsTemplate() {
   const historyContent = monthlyTransactionHistory(historyTransactions);
   const historyControls = `
     <div class="history-toolbar">
+      <label>Mes/Ano
+        <input name="transactionMonth" type="month" value="${escapeAttribute(state.transactionMonth)}" />
+      </label>
+      <label>Cartao
+        <select name="transactionCardId">
+          <option value="">Todos</option>
+          ${state.data.cards.map((card) => option(card.id, card.name, state.transactionCardId)).join("")}
+        </select>
+      </label>
       <label>Localizar
         <input name="transactionSearch" type="search" placeholder="Descricao, valor, categoria..." value="${escapeAttribute(state.transactionSearch)}" />
       </label>
@@ -717,9 +730,13 @@ function monthlyTransactionHistory(transactions) {
 
 function filterAndSortTransactions(transactions) {
   const query = normalizeSearch(state.transactionSearch);
-  const filtered = query
-    ? transactions.filter((item) => transactionMatchesSearch(item, query))
-    : [...transactions];
+  const selectedMonth = state.transactionMonth || "";
+  const selectedCardId = state.transactionCardId || "";
+  const filtered = transactions.filter((item) => {
+    if (selectedMonth && monthKey(item.date) !== selectedMonth) return false;
+    if (selectedCardId && item.cardId !== selectedCardId) return false;
+    return query ? transactionMatchesSearch(item, query) : true;
+  });
 
   return sortTransactions(filtered, state.transactionSort);
 }
@@ -985,6 +1002,14 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-card-payment]").forEach((button) => {
     button.addEventListener("click", () => addCardPayment(button));
+  });
+  document.querySelector("[name='transactionMonth']")?.addEventListener("change", (event) => {
+    state.transactionMonth = event.target.value || "";
+    refreshTransactionHistory();
+  });
+  document.querySelector("[name='transactionCardId']")?.addEventListener("change", (event) => {
+    state.transactionCardId = event.target.value || "";
+    refreshTransactionHistory();
   });
   document.querySelector("[name='transactionSearch']")?.addEventListener("input", (event) => {
     state.transactionSearch = event.target.value;
